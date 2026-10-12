@@ -137,6 +137,8 @@ export class UI {
     shadow.addEventListener('change', () => this.viewer.setQuality({ ao: shadow.checked }));
     const glow = document.getElementById('toggle-glow');
     glow.addEventListener('change', () => this.viewer.setQuality({ bloom: glow.checked }));
+    const panel = document.getElementById('toggle-panel');
+    panel.addEventListener('change', () => this.viewer.setSidePanel(panel.checked));
 
     this.el.search.addEventListener('input', () => {
       this.query = this.el.search.value.trim().toLowerCase();

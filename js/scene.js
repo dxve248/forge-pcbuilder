@@ -302,7 +302,21 @@ export class Viewer {
     // normalise glow across the whole build (materials are shared between
     // clones, so a part may arrive already carrying a stale highlight)
     this._applyHighlight();
+    this._applySidePanel();
     this._dirty = true;
+  }
+
+  /** Show or hide the case's removable side panel. */
+  setSidePanel(on) {
+    this._sidePanel = on;
+    this._applySidePanel();
+    this._dirty = true;
+  }
+
+  _applySidePanel() {
+    const on = this._sidePanel !== false;
+    const group = this.parts.get('case');
+    if (group) group.traverse(o => { if (o.userData.sidePanel) o.visible = on; });
   }
 
   highlight(category) {

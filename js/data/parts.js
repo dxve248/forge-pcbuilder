@@ -91,13 +91,13 @@ export const PARTS = {
   ],
 
   ram: [
-    { id: 'd5-16-5600', name: 'Corsair Vengeance DDR5 16GB (2×8)', brand: 'corsair', price: 239, ramType: 'DDR5', capacity: 16, sticks: 2, speed: 5600, power: 10, rgb: false },
-    { id: 'd5-32-6000', name: 'G.Skill Trident Z5 DDR5 32GB (2×16)', brand: 'gskill', price: 469, ramType: 'DDR5', capacity: 32, sticks: 2, speed: 6000, power: 12, rgb: true },
-    { id: 'd5-64-5600', name: 'Corsair Vengeance DDR5 64GB (2×32)', brand: 'corsair', price: 799, ramType: 'DDR5', capacity: 64, sticks: 2, speed: 5600, power: 15, rgb: false },
-    { id: 'd5-48-7200', name: 'G.Skill Trident Z5 RGB DDR5 48GB (2×24)', brand: 'gskill', price: 749, ramType: 'DDR5', capacity: 48, sticks: 2, speed: 7200, power: 14, rgb: true },
-    { id: 'd4-16-3600', name: 'Corsair Vengeance DDR4 16GB (2×8)', brand: 'corsair', price: 189, ramType: 'DDR4', capacity: 16, sticks: 2, speed: 3600, power: 8, rgb: false },
-    { id: 'd4-32-3200', name: 'Kingston Fury DDR4 32GB (2×16)', brand: 'kingston', price: 309, ramType: 'DDR4', capacity: 32, sticks: 2, speed: 3200, power: 10, rgb: true },
-    { id: 'd4-64-3600', name: 'G.Skill Ripjaws DDR4 64GB (2×32)', brand: 'gskill', price: 549, ramType: 'DDR4', capacity: 64, sticks: 2, speed: 3600, power: 14, rgb: false }
+    { id: 'd5-16-5600', name: 'Corsair Vengeance DDR5 16GB (2×8)', brand: 'corsair', price: 329, ramType: 'DDR5', capacity: 16, sticks: 2, speed: 5600, power: 10, rgb: false },
+    { id: 'd5-32-6000', name: 'G.Skill Trident Z5 DDR5 32GB (2×16)', brand: 'gskill', price: 559, ramType: 'DDR5', capacity: 32, sticks: 2, speed: 6000, power: 12, rgb: true },
+    { id: 'd5-64-5600', name: 'Corsair Vengeance DDR5 64GB (2×32)', brand: 'corsair', price: 1149, ramType: 'DDR5', capacity: 64, sticks: 2, speed: 5600, power: 15, rgb: false },
+    { id: 'd5-48-7200', name: 'G.Skill Trident Z5 RGB DDR5 48GB (2×24)', brand: 'gskill', price: 899, ramType: 'DDR5', capacity: 48, sticks: 2, speed: 7200, power: 14, rgb: true },
+    { id: 'd4-16-3600', name: 'Corsair Vengeance DDR4 16GB (2×8)', brand: 'corsair', price: 229, ramType: 'DDR4', capacity: 16, sticks: 2, speed: 3600, power: 8, rgb: false },
+    { id: 'd4-32-3200', name: 'Kingston Fury DDR4 32GB (2×16)', brand: 'kingston', price: 399, ramType: 'DDR4', capacity: 32, sticks: 2, speed: 3200, power: 10, rgb: true },
+    { id: 'd4-64-3600', name: 'G.Skill Ripjaws DDR4 64GB (2×32)', brand: 'gskill', price: 749, ramType: 'DDR4', capacity: 64, sticks: 2, speed: 3600, power: 14, rgb: false }
   ],
 
   gpu: [
@@ -112,12 +112,12 @@ export const PARTS = {
   ],
 
   storage: [
-    { id: '990pro-1tb', name: 'Samsung 990 PRO 1TB NVMe', brand: 'samsung', price: 399, interface: 'NVMe', capacity: 1000, power: 7, form: 'M.2' },
-    { id: '990pro-2tb', name: 'Samsung 990 PRO 2TB NVMe', brand: 'samsung', price: 699, interface: 'NVMe', capacity: 2000, power: 8, form: 'M.2' },
-    { id: 'sn850x-2tb', name: 'WD Black SN850X 2TB NVMe', brand: 'wd', price: 599, interface: 'NVMe', capacity: 2000, power: 8, form: 'M.2' },
-    { id: 'p3-1tb', name: 'Crucial P3 1TB NVMe', brand: 'crucial', price: 239, interface: 'NVMe', capacity: 1000, power: 5, form: 'M.2' },
-    { id: '870evo-1tb', name: 'Samsung 870 EVO 1TB SATA', brand: 'samsung', price: 349, interface: 'SATA', capacity: 1000, power: 4, form: '2.5"' },
-    { id: 'barracuda-2tb', name: 'Seagate Barracuda 2TB HDD', brand: 'seagate', price: 219, interface: 'SATA', capacity: 2000, power: 6, form: '3.5"' }
+    { id: '990pro-1tb', name: 'Samsung 990 PRO 1TB NVMe', brand: 'samsung', price: 850, interface: 'NVMe', capacity: 1000, power: 7, form: 'M.2' },
+    { id: '990pro-2tb', name: 'Samsung 990 PRO 2TB NVMe', brand: 'samsung', price: 1450, interface: 'NVMe', capacity: 2000, power: 8, form: 'M.2' },
+    { id: 'sn850x-2tb', name: 'WD Black SN850X 2TB NVMe', brand: 'wd', price: 1300, interface: 'NVMe', capacity: 2000, power: 8, form: 'M.2' },
+    { id: 'p3-1tb', name: 'Crucial P3 1TB NVMe', brand: 'crucial', price: 549, interface: 'NVMe', capacity: 1000, power: 5, form: 'M.2' },
+    { id: '870evo-1tb', name: 'Samsung 870 EVO 1TB SATA', brand: 'samsung', price: 749, interface: 'SATA', capacity: 1000, power: 4, form: '2.5"' },
+    { id: 'barracuda-2tb', name: 'Seagate Barracuda 2TB HDD', brand: 'seagate', price: 269, interface: 'SATA', capacity: 2000, power: 6, form: '3.5"' }
   ],
 
   psu: [

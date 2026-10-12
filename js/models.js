@@ -153,6 +153,16 @@ function glassMat() {
     side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.04
   });
 }
+// Smoked tempered-glass side panel: tinted enough to hide the build until the
+// panel is removed from the toolbar.
+function sideGlassMat() {
+  return new THREE.MeshPhysicalMaterial({
+    color: 0x141d24, metalness: 0.2, roughness: 0.07,
+    transparent: true, opacity: 0.72, ior: 1.5,
+    envMapIntensity: 2.0, side: THREE.DoubleSide,
+    clearcoat: 1, clearcoatRoughness: 0.03
+  });
+}
 function perfMat(color) {
   const map = perfTex(color);
   return new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide, metalness: 0.6, roughness: 0.5, color: 0xffffff });
@@ -307,12 +317,22 @@ export function buildCase(part) {
     g.add(put(box(0.5, H - 10, 0.4, emissiveMat(accent, 1.0)), -W / 2 + 1.6, H / 2, D / 2 + 0.5));
   }
 
-  // Side cover removed so the internals are visible from the camera side.
-  // Only slim rails remain to frame the open panel.
+  // Slim rails frame the camera-side opening.
   g.add(put(rbox(0.7, 0.7, D, shell), W / 2 - 0.35, H - 0.35, 0));
   g.add(put(rbox(0.7, 0.7, D, shell), W / 2 - 0.35, 0.35, 0));
   g.add(put(rbox(0.7, H, 0.8, shell), W / 2 - 0.35, H / 2, -D / 2 + 0.4));
   g.add(put(rbox(0.7, H, 0.8, shell), W / 2 - 0.35, H / 2, D / 2 - 0.4));
+
+  // Removable tempered-glass side panel. The toolbar can lift it off so the
+  // finished build is visible from the camera side.
+  const panel = new THREE.Group();
+  panel.add(new THREE.Mesh(new THREE.BoxGeometry(0.22, H - 2.0, D - 2.0), sideGlassMat()));
+  const panelTrim = brushedMat(0x0e1116, 0.4, 0.7);
+  panel.add(put(rbox(0.5, 1.0, D - 2.0, panelTrim), 0, H / 2 - 0.7, 0));
+  panel.add(put(rbox(0.5, 1.0, D - 2.0, panelTrim), 0, -H / 2 + 0.7, 0));
+  panel.position.set(W / 2 - 0.9, H / 2, 0);
+  panel.userData.sidePanel = true;
+  g.add(panel);
 
   // Feet
   const footMat = solidMat(0x0b0d10, 0.9, 0.05);
