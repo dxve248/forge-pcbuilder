@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ForgePC — 3D PC Builder</title>
+  <link rel="stylesheet" href="css/styles.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">⛏</span>
+        <span class="brand-name">Forge<span>PC</span></span>
+        <span class="brand-sub">3D Builder</span>
+      </div>
+      <div class="toolbar">
+        <button id="btn-random" class="btn primary">🎲 Random Build</button>
+        <button id="btn-reset" class="btn">↺ Reset</button>
+        <button id="btn-view" class="btn">⛶ Reset View</button>
+        <label class="toggle"><input type="checkbox" id="toggle-spin" checked /> Auto-rotate</label>
+        <label class="toggle"><input type="checkbox" id="toggle-shadow" checked /> Contact shadows</label>
+        <label class="toggle"><input type="checkbox" id="toggle-glow" checked /> Glow</label>
+      </div>
+    </header>
+
+    <main>
+      <aside class="sidebar">
+        <nav class="categories" id="categories"></nav>
+        <div class="list-tools">
+          <input id="part-search" class="search" type="search" placeholder="Search parts…" autocomplete="off" />
+          <select id="part-sort" class="sort" title="Sort parts">
+            <option value="recommended">Sort: Recommended</option>
+            <option value="price-asc">Price: low → high</option>
+            <option value="price-desc">Price: high → low</option>
+            <option value="name">Name: A → Z</option>
+          </select>
+        </div>
+        <div class="partlist" id="partlist"></div>
+      </aside>
+
+      <section class="viewport">
+        <div id="canvas-wrap"></div>
+        <div class="hud" id="hud"></div>
+        <div class="compare" id="compare" hidden></div>
+        <div class="viewer-hint">Drag to orbit · Scroll to zoom · Right-drag to pan · Click a part to inspect</div>
+      </section>
+
+      <aside class="summary">
+        <div class="panel totals">
+          <div class="total-row">
+            <span class="total-label">Total build</span>
+            <span class="total-price" id="total-price">$0</span>
+          </div>
+          <div class="part-count" id="part-count">0 / 8 parts</div>
+        </div>
+
+        <div class="panel power-panel">
+          <div class="panel-title">Estimated Power</div>
+          <div class="power-bar"><div class="power-fill" id="power-fill"></div></div>
+          <div class="power-text" id="power-text">0 W</div>
+        </div>
+
+        <div class="panel compat-panel">
+          <div class="panel-title">Compatibility</div>
+          <div class="compat" id="compat"></div>
+        </div>
+
+        <div class="panel build-panel">
+          <div class="panel-title">Your Build</div>
+          <div class="build-list" id="build-list"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
