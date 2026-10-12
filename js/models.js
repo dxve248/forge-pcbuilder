@@ -700,18 +700,43 @@ export const BUILDERS = {
 
 export function buildPart(category, part) {
   const fn = BUILDERS[category];
-  return fn ? fn(part) : null;
+  if (!fn) return null;
+
+  // Build each distinct part once and hand out cheap clones that share the
+  // cached geometry, materials and textures. This keeps swapping parts fast.
+  const key = `${category}:${part.id}`;
+  let source = modelCache.get(key);
+  if (!source) {
+    source = fn(part);
+    if (!source) return null;
+    markShared(source);
+    modelCache.set(key, source);
+  }
+  return source.clone(true);
 }
 
-// Geometries flagged `shared` (buffer-geometry caches) and every canvas
-// texture (the `texCache`) are reused across parts, so they are left
-// untouched here — only per-part geometry and materials are released.
+// Flag every geometry/material in a cached source as shared so disposeGroup
+// leaves them intact for the next clone.
+const modelCache = new Map();
+function markShared(group) {
+  group.traverse(obj => {
+    if (obj.geometry) obj.geometry.userData.shared = true;
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => { m.userData.shared = true; });
+    }
+  });
+}
+
+// Shared geometries and materials (every cached model, plus the blade
+// buffer-geometry cache) are reused across parts, so only per-build
+// geometry and materials are released here.
 export function disposeGroup(group) {
   group.traverse(obj => {
     if (obj.geometry && !obj.geometry.userData.shared) obj.geometry.dispose();
     if (obj.material) {
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      mats.forEach(m => m.dispose());
+      mats.forEach(m => { if (!m.userData.shared) m.dispose(); });
     }
   });
 }

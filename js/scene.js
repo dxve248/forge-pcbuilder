@@ -78,14 +78,37 @@ export class Viewer {
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
-    this.resize();
 
-    this.renderer.setAnimationLoop(() => this._tick());
+    // Render-on-demand: frames are drawn only while something is actually
+    // changing (orbit/damping, auto-rotate, a focus tween or a part spawning),
+    // so an idle viewer costs almost nothing. `_dirty` is set by controls,
+    // resize and any state change below.
+    this._dirty = true;
+    this._loop = () => this._tick();
+    this._onVisibility = () => {
+      if (document.hidden) {
+        this.renderer.setAnimationLoop(null);
+      } else {
+        this.clock.getDelta(); // drop the paused interval
+        this._dirty = true;
+        this.renderer.setAnimationLoop(this._loop);
+      }
+    };
+    document.addEventListener('visibilitychange', this._onVisibility);
+
+    this.resize();
+    this.renderer.setAnimationLoop(this._loop);
   }
 
   _initRenderer() {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: true, alpha: false, powerPreference: 'high-performance'
+    });
+    // Cap the device pixel ratio (big win on HiDPI screens). Override with
+    // ?dpr=1 for low-end machines.
+    const dprOverride = parseFloat(this._params.get('dpr'));
+    const dprCap = Number.isFinite(dprOverride) ? dprOverride : 1.5;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -116,7 +139,7 @@ export class Viewer {
     const key = new THREE.DirectionalLight(0xffffff, 2.5);
     key.position.set(40, 70, 50);
     key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.mapSize.set(1024, 1024);
     key.shadow.camera.near = 10;
     key.shadow.camera.far = 260;
     const s = 70;
@@ -222,6 +245,8 @@ export class Viewer {
     controls.autoRotateSpeed = 0.9;
     // any manual interaction cancels a running focus animation
     controls.addEventListener('start', () => { this._camTween = null; });
+    // moving the camera (drag, damping, auto-rotate) schedules a redraw
+    controls.addEventListener('change', () => { this._dirty = true; });
     this.controls = controls;
   }
 
@@ -262,26 +287,29 @@ export class Viewer {
       disposeGroup(existing);
       this.parts.delete(category);
     }
-    if (!part) return;
+    if (part) {
+      const group = buildPart(category, part);
+      if (group) {
+        group.userData.partId = part.id;
 
-    const group = buildPart(category, part);
-    if (!group) return;
-    group.userData.partId = part.id;
-
-    // small pop-in animation
-    group.scale.setScalar(0.001);
-    group.userData.spawn = 0;
-    this.parts.set(category, group);
-    this.buildGroup.add(group);
-
-    // a freshly swapped part needs the current highlight re-applied to it
-    if (this.highlighted === category) this._applyHighlight();
+        // small pop-in animation
+        group.scale.setScalar(0.001);
+        group.userData.spawn = 0;
+        this.parts.set(category, group);
+        this.buildGroup.add(group);
+      }
+    }
+    // normalise glow across the whole build (materials are shared between
+    // clones, so a part may arrive already carrying a stale highlight)
+    this._applyHighlight();
+    this._dirty = true;
   }
 
   highlight(category) {
     if (this.highlighted === category) return;
     this.highlighted = category;
     this._applyHighlight();
+    this._dirty = true;
   }
 
   /** Push the current highlight to the outline pass and every installed part. */
@@ -293,14 +321,18 @@ export class Viewer {
     for (const [cat, group] of this.parts) {
       const on = cat === this.highlighted;
       group.traverse(o => {
-        if (!o.isMesh || !o.material || !('emissiveIntensity' in o.material)) return;
-        // remember the material's original glow the first time we touch it
-        if (o.userData._baseIntensity === undefined) {
-          o.userData._baseIntensity = o.material.emissiveIntensity ?? 1;
+        if (!o.isMesh || !o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of mats) {
+          if (!('emissiveIntensity' in m)) continue;
+          // remember each material's original glow the first time we touch it
+          if (m.userData._baseEmissive === undefined) {
+            m.userData._baseEmissive = m.emissiveIntensity ?? 1;
+          }
+          m.emissiveIntensity = on
+            ? m.userData._baseEmissive + 0.9
+            : m.userData._baseEmissive;
         }
-        o.material.emissiveIntensity = on
-          ? o.userData._baseIntensity + 0.9
-          : o.userData._baseIntensity;
       });
     }
   }
@@ -367,6 +399,7 @@ export class Viewer {
     if (ao !== undefined && this.ssao) this.ssao.enabled = ao;
     if (bloom !== undefined && this.bloom) this.bloom.enabled = bloom;
     if (outline !== undefined && this.outline) this.outline.enabled = outline;
+    this._dirty = true;
   }
 
   resize() {
@@ -376,11 +409,13 @@ export class Viewer {
     if (this.composer) this.composer.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this._dirty = true;
   }
 
   /** Release GPU resources and listeners. */
   dispose() {
     this.renderer.setAnimationLoop(null);
+    document.removeEventListener('visibilitychange', this._onVisibility);
     this.resizeObserver.disconnect();
     this.controls.dispose();
     for (const group of this.parts.values()) disposeGroup(group);
@@ -391,6 +426,7 @@ export class Viewer {
 
   _tick() {
     const dt = this.clock.getDelta();
+    let animating = false;
 
     // ease spawned parts up to full scale
     for (const group of this.parts.values()) {
@@ -399,6 +435,7 @@ export class Viewer {
         const t = group.userData.spawn;
         const eased = 1 - Math.pow(1 - t, 3);
         group.scale.setScalar(Math.max(0.001, eased));
+        animating = true;
       }
     }
 
@@ -409,13 +446,19 @@ export class Viewer {
       const e = tw.t < 0.5 ? 2 * tw.t * tw.t : 1 - Math.pow(-2 * tw.t + 2, 2) / 2;
       this.camera.position.lerpVectors(tw.fromPos, tw.toPos, e);
       this.controls.target.lerpVectors(tw.fromTarget, tw.toTarget, e);
+      animating = true;
       if (tw.t >= 1) {
         this._camTween = null;
         if (this._resumeRotate) { this.controls.autoRotate = true; this._resumeRotate = false; }
       }
     }
 
-    this.controls.update();
+    this.controls.update(); // may set this._dirty via the 'change' event
+
+    // draw only when something moved or changed
+    if (!this._dirty && !animating) return;
+    this._dirty = false;
+
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }

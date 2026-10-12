@@ -4,6 +4,8 @@
 
 import { CATEGORIES, PARTS } from './data/parts.js';
 import { evaluateCompatibility } from './data/rules.js';
+import { formatPrice } from './currency.js';
+import { buyLinks } from './retailers.js';
 
 function fmtCapacity(gb) {
   return gb >= 1000 ? `${(gb / 1000).toFixed(gb % 1000 === 0 ? 0 : 1)}TB` : `${gb}GB`;
@@ -94,6 +96,7 @@ export class UI {
       powerText: document.getElementById('power-text'),
       compat: document.getElementById('compat'),
       buildList: document.getElementById('build-list'),
+      buy: document.getElementById('buy'),
       hud: document.getElementById('hud')
     };
 
@@ -189,6 +192,7 @@ export class UI {
     this._renderList();
     this._renderCompare();
     this._renderSummary();
+    this._renderBuy();
     this._renderHud();
   }
 
@@ -241,7 +245,7 @@ export class UI {
           <span class="part-name">${part.name}</span>
           <span class="part-spec">${SPEC_FMT[cat] ? SPEC_FMT[cat](part) : ''}</span>
         </div>
-        <span class="part-price">$${part.price}</span>
+        <span class="part-price">${formatPrice(part.price)}</span>
         <span class="cmp-toggle${inCompare ? ' on' : ''}" title="Add to comparison" role="button" tabindex="0">⇄</span>`;
       card.addEventListener('click', () => this._install(cat, part.id));
       const toggle = card.querySelector('.cmp-toggle');
@@ -313,7 +317,7 @@ export class UI {
       th.innerHTML = `
         <button class="cmp-pick" type="button" title="Install ${p.name}">
           <span class="cmp-name">${p.name}</span>
-          <span class="cmp-price${p.price === cheapest ? ' cheap' : ''}">$${p.price}</span>
+          <span class="cmp-price${p.price === cheapest ? ' cheap' : ''}">${formatPrice(p.price)}</span>
           ${badge}
         </button>
         <button class="cmp-drop" type="button" title="Remove from comparison">×</button>`;
@@ -350,7 +354,7 @@ export class UI {
 
   _renderSummary() {
     const { store } = this;
-    this.el.totalPrice.textContent = `$${store.totalPrice.toLocaleString()}`;
+    this.el.totalPrice.textContent = formatPrice(store.totalPrice);
 
     const installedCount = store.categories.filter(c => store.build[c]).length;
     this.el.partCount.textContent = `${installedCount} / ${store.categories.length} parts`;
@@ -389,7 +393,7 @@ export class UI {
       row.innerHTML = `
         <span class="build-icon">${meta.icon}</span>
         <span class="build-name">${part ? part.name : 'Not selected'}</span>
-        <span class="build-price">${part ? '$' + part.price : '—'}</span>`;
+        <span class="build-price">${part ? formatPrice(part.price) : '—'}</span>`;
       row.addEventListener('click', () => {
         this.activeCategory = cat;
         this._clearFilters();
@@ -400,6 +404,54 @@ export class UI {
       });
       this.el.buildList.appendChild(row);
     }
+  }
+
+  _renderBuy() {
+    const { store } = this;
+    const box = this.el.buy;
+    const missing = store.categories.filter(c => !store.build[c]);
+
+    if (missing.length) {
+      const names = missing.map(id => CATEGORIES.find(c => c.id === id).label).join(' · ');
+      box.innerHTML = `
+        <div class="buy-intro">Finish your build to see where to buy every part in the UAE.</div>
+        <div class="buy-missing"><b>Still needed:</b> ${names}</div>`;
+      return;
+    }
+
+    const errors = store.compatibility.filter(c => c.level === 'error');
+    const warnings = store.compatibility.filter(c => c.level === 'warn');
+    let notice;
+    if (errors.length) {
+      notice = `<div class="buy-intro bad">⚠ ${errors.length} compatibility issue${errors.length > 1 ? 's' : ''} — fix before ordering.</div>`;
+    } else if (warnings.length) {
+      notice = `<div class="buy-intro warn">Complete build with ${warnings.length} warning${warnings.length > 1 ? 's' : ''}.</div>`;
+    } else {
+      notice = `<div class="buy-intro ok">✓ Build complete &amp; compatible — shop the list below.</div>`;
+    }
+
+    const rows = store.categories.slice().reverse().map(cat => {
+      const part = store.build[cat];
+      const meta = CATEGORIES.find(c => c.id === cat);
+      const chips = buyLinks(part).map(l =>
+        `<a class="buy-chip" href="${l.url}" target="_blank" rel="noopener noreferrer" title="Search ${part.name} on ${l.name}">${l.name}</a>`
+      ).join('');
+      return `
+        <div class="buy-row">
+          <div class="buy-head">
+            <span class="build-icon">${meta.icon}</span>
+            <span class="buy-name">${part.name}</span>
+            <span class="buy-price">${formatPrice(part.price)}</span>
+          </div>
+          <div class="buy-links">${chips}</div>
+        </div>`;
+    }).join('');
+
+    box.innerHTML = `
+      ${notice}
+      <div class="buy-list">${rows}</div>
+      <div class="buy-total"><span>Parts subtotal</span><span>${formatPrice(store.totalPrice)}</span></div>
+      <div class="buy-disclaimer">Indicative UAE retail prices in AED (incl. VAT). Availability and final price vary by retailer.</div>`;
   }
 
   _renderHud() {
@@ -419,7 +471,7 @@ export class UI {
       <div class="hud-name">${part.name}</div>
       <div class="hud-spec">${SPEC_FMT[category] ? SPEC_FMT[category](part) : ''}</div>
       <div class="hud-row">
-        <span class="hud-price">$${part.price}</span>
+        <span class="hud-price">${formatPrice(part.price)}</span>
         <button class="hud-remove" id="hud-remove">Remove</button>
       </div>`;
     hud.querySelector('#hud-remove').addEventListener('click', () => {
