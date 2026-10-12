@@ -22,6 +22,18 @@ const TYPES = {
 
 const send = (res, status, body, headers = {}) => res.writeHead(status, headers).end(body);
 
+// Live prices live in price-cache.json (refilled by js/update-prices.mjs).
+// When absent or fresh, the client falls back to the catalog estimates.
+const PRICES_CACHE = join(ROOT, 'price-cache.json');
+async function readPriceCache() {
+  try {
+    const raw = await readFile(PRICES_CACHE, 'utf8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 http.createServer(async (req, res) => {
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -29,6 +41,20 @@ http.createServer(async (req, res) => {
     }
 
     const pathname = decodeURIComponent((req.url || '/').split('?')[0]);
+
+    if (pathname === '/api/prices') {
+      const cache = await readPriceCache();
+      const body = JSON.stringify(cache && cache.checkedAt
+        ? { mode: 'live', checkedAt: cache.checkedAt, prices: cache.prices || {} }
+        : { mode: 'estimate', checkedAt: null, prices: {} });
+      res.writeHead(200, {
+        'Content-Type': TYPES['.json'],
+        'Content-Length': body.length,
+        'Cache-Control': 'no-store, must-revalidate'
+      });
+      return res.end(req.method === 'HEAD' ? undefined : body);
+    }
+
     // Resolve against ROOT and reject anything that escapes it (defends
     // against ../ traversal and same-prefix sibling directories).
     const file = normalize(join(ROOT, pathname === '/' ? '/index.html' : pathname));

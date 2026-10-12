@@ -334,6 +334,14 @@ export function buildCase(part) {
   panel.userData.sidePanel = true;
   g.add(panel);
 
+  // Solid cover on the motherboard-tray side (-X). It rides the same toolbar
+  // toggle as the glass panel, so unchecking "Side panels" opens the whole case.
+  const panelBack = new THREE.Group();
+  panelBack.add(new THREE.Mesh(new THREE.BoxGeometry(0.6, H - 1.6, D - 1.6), shell));
+  panelBack.position.set(-W / 2 + 0.6, H / 2, 0);
+  panelBack.userData.sidePanel = true;
+  g.add(panelBack);
+
   // Feet
   const footMat = solidMat(0x0b0d10, 0.9, 0.05);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {

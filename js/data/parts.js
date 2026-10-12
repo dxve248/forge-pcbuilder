@@ -57,6 +57,48 @@ export const PARTS = {
       formFactors: ['Mini-ITX'],
       maxGpuLength: 330, maxCoolerHeight: 155, maxRadiator: 240,
       fans: 2, color: 0x2b2e34, accent: 0xff6b6b
+    },
+    {
+      id: 'lancool-216', name: 'Lian Li Lancool 216', brand: 'Lian Li', price: 419,
+      style: 'airflow',
+      formFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+      maxGpuLength: 392, maxCoolerHeight: 180, maxRadiator: 360,
+      fans: 2, color: 0x22252b, accent: 0xff3355
+    },
+    {
+      id: 'nzxt-h9-flow', name: 'NZXT H9 Flow', brand: 'NZXT', price: 599,
+      style: 'dualchamber', glass: true,
+      formFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+      maxGpuLength: 435, maxCoolerHeight: 165, maxRadiator: 360,
+      fans: 3, color: 0x20242a, accent: 0x00e0c6
+    },
+    {
+      id: 'meshify-2', name: 'Fractal Meshify 2', brand: 'Fractal', price: 449,
+      style: 'airflow', glass: true,
+      formFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+      maxGpuLength: 360, maxCoolerHeight: 185, maxRadiator: 360,
+      fans: 3, color: 0x2a2d33, accent: 0x6f42c1
+    },
+    {
+      id: 'phanteks-p400a', name: 'Phanteks Eclipse P400A', brand: 'Phanteks', price: 379,
+      style: 'airflow', glass: true,
+      formFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+      maxGpuLength: 420, maxCoolerHeight: 160, maxRadiator: 360,
+      fans: 3, color: 0x2e3137, accent: 0x00c8ff
+    },
+    {
+      id: 'fractal-define7', name: 'Fractal Define 7', brand: 'Fractal', price: 559,
+      style: 'silent',
+      formFactors: ['ATX', 'Micro-ATX', 'Mini-ITX'],
+      maxGpuLength: 315, maxCoolerHeight: 185, maxRadiator: 360,
+      fans: 3, color: 0x2b2e33, accent: 0xcfd8e3
+    },
+    {
+      id: 'masterbox-q300l', name: 'Cooler Master MasterBox Q300L', brand: 'Cooler Master', price: 199,
+      style: 'compact', compact: true,
+      formFactors: ['Micro-ATX', 'Mini-ITX'],
+      maxGpuLength: 360, maxCoolerHeight: 157, maxRadiator: 240,
+      fans: 1, color: 0x23262c, accent: 0xffd166
     }
   ],
 
@@ -67,7 +109,13 @@ export const PARTS = {
     { id: 'z790-strix', name: 'ASUS ROG STRIX Z790-E', brand: 'asus', price: 1599, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'ATX', m2Slots: 4, accent: 0xff2d55, color: 0x0c0f13 },
     { id: 'z790-pro', name: 'MSI PRO Z790-A WIFI', brand: 'msi', price: 1049, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'ATX', m2Slots: 4, accent: 0xff2a2a, color: 0x121519 },
     { id: 'b760m-prime', name: 'ASUS PRIME B760M-A', brand: 'asus', price: 599, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'Micro-ATX', m2Slots: 2, accent: 0xd7dde5, color: 0x14181d },
-    { id: 'b760-itx', name: 'ASRock B760M-ITX', brand: 'asrock', price: 749, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'Mini-ITX', m2Slots: 2, accent: 0xed1c24, color: 0x101419 }
+    { id: 'b760-itx', name: 'ASRock B760M-ITX', brand: 'asrock', price: 749, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'Mini-ITX', m2Slots: 2, accent: 0xed1c24, color: 0x101419 },
+    { id: 'x670e-aorus-master', name: 'Gigabyte X670E AORUS MASTER', brand: 'gigabyte', price: 1999, socket: 'AM5', ramType: 'DDR5', formFactor: 'ATX', m2Slots: 4, accent: 0xff6a00, color: 0x0e1218 },
+    { id: 'b650i-aorus-ultra', name: 'Gigabyte B650I AORUS ULTRA', brand: 'gigabyte', price: 999, socket: 'AM5', ramType: 'DDR5', formFactor: 'Mini-ITX', m2Slots: 2, accent: 0xff8a00, color: 0x101419 },
+    { id: 'b650-plus', name: 'ASUS TUF Gaming B650-PLUS', brand: 'asus', price: 749, socket: 'AM5', ramType: 'DDR5', formFactor: 'ATX', m2Slots: 3, accent: 0x00e0c6, color: 0x11151a },
+    { id: 'h610m-ddr4', name: 'MSI PRO H610M-E DDR4', brand: 'msi', price: 349, socket: 'LGA1700', ramType: 'DDR4', formFactor: 'Micro-ATX', m2Slots: 1, accent: 0xd7dde5, color: 0x14181d },
+    { id: 'b760m-tomahawk', name: 'MSI MAG B760M Mortar', brand: 'msi', price: 829, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'Micro-ATX', m2Slots: 3, accent: 0xff2a2a, color: 0x121519 },
+    { id: 'z790-aorus-elite', name: 'Gigabyte Z790 AORUS ELITE AX', brand: 'gigabyte', price: 1249, socket: 'LGA1700', ramType: 'DDR5', formFactor: 'ATX', m2Slots: 4, accent: 0x00c8ff, color: 0x0f1319 }
   ],
 
   cpu: [
@@ -77,7 +125,15 @@ export const PARTS = {
     { id: 'i5-13400f', name: 'Intel Core i5-13400F', price: 749, socket: 'LGA1700', cores: 10, clock: '4.6 GHz', power: 65, brand: 'intel' },
     { id: 'i5-13600k', name: 'Intel Core i5-13600K', price: 1149, socket: 'LGA1700', cores: 14, clock: '5.1 GHz', power: 125, brand: 'intel' },
     { id: 'i7-13700k', name: 'Intel Core i7-13700K', price: 1449, socket: 'LGA1700', cores: 16, clock: '5.4 GHz', power: 125, brand: 'intel' },
-    { id: 'i9-13900k', name: 'Intel Core i9-13900K', price: 2199, socket: 'LGA1700', cores: 24, clock: '5.8 GHz', power: 125, brand: 'intel' }
+    { id: 'i9-13900k', name: 'Intel Core i9-13900K', price: 2199, socket: 'LGA1700', cores: 24, clock: '5.8 GHz', power: 125, brand: 'intel' },
+    { id: 'r5-7500f', name: 'AMD Ryzen 5 7500F', price: 699, socket: 'AM5', cores: 6, clock: '3.7 GHz', power: 65, brand: 'amd' },
+    { id: 'r7-7700x', name: 'AMD Ryzen 7 7700X', price: 1149, socket: 'AM5', cores: 8, clock: '5.4 GHz', power: 105, brand: 'amd' },
+    { id: 'r7-9800x3d', name: 'AMD Ryzen 7 9800X3D', price: 2199, socket: 'AM5', cores: 8, clock: '5.2 GHz', power: 120, brand: 'amd' },
+    { id: 'r9-9950x', name: 'AMD Ryzen 9 9950X', price: 2799, socket: 'AM5', cores: 16, clock: '5.7 GHz', power: 170, brand: 'amd' },
+    { id: 'i3-13100f', name: 'Intel Core i3-13100F', price: 449, socket: 'LGA1700', cores: 4, clock: '4.5 GHz', power: 58, brand: 'intel' },
+    { id: 'i5-14600k', name: 'Intel Core i5-14600K', price: 1299, socket: 'LGA1700', cores: 14, clock: '5.3 GHz', power: 125, brand: 'intel' },
+    { id: 'i7-14700k', name: 'Intel Core i7-14700K', price: 1749, socket: 'LGA1700', cores: 20, clock: '5.6 GHz', power: 125, brand: 'intel' },
+    { id: 'i9-14900k', name: 'Intel Core i9-14900K', price: 2399, socket: 'LGA1700', cores: 24, clock: '6.0 GHz', power: 125, brand: 'intel' }
   ],
 
   cooler: [
@@ -87,7 +143,13 @@ export const PARTS = {
     { id: 'dark-rock-pro-4', name: 'be quiet! Dark Rock Pro 4', brand: 'bequiet', price: 379, type: 'Air', layout: 'dual', height: 163, power: 4, sockets: ['AM5', 'LGA1700'] },
     { id: 'kraken-240', name: 'NZXT Kraken 240 AIO', brand: 'nzxt', price: 549, type: 'AIO', radiator: 240, power: 10, sockets: ['AM5', 'LGA1700'] },
     { id: 'h150i-360', name: 'Corsair iCUE H150i 360 AIO', brand: 'corsair', price: 749, type: 'AIO', radiator: 360, power: 12, sockets: ['AM5', 'LGA1700'] },
-    { id: 'gala-360', name: 'Arctic Liquid Freezer III 360', brand: 'arctic', price: 469, type: 'AIO', radiator: 360, power: 12, sockets: ['AM5', 'LGA1700'] }
+    { id: 'gala-360', name: 'Arctic Liquid Freezer III 360', brand: 'arctic', price: 469, type: 'AIO', radiator: 360, power: 12, sockets: ['AM5', 'LGA1700'] },
+    { id: 'pa120', name: 'Thermalright Peerless Assassin 120 SE', brand: 'thermalright', price: 169, type: 'Air', layout: 'dual', height: 155, power: 4, sockets: ['AM5', 'LGA1700'] },
+    { id: 'fuma3', name: 'Scythe Fuma 3', brand: 'scythe', price: 319, type: 'Air', layout: 'dual', height: 154, power: 4, sockets: ['AM5', 'LGA1700'] },
+    { id: 'nh-u12s', name: 'Noctua NH-U12S', brand: 'noctua', price: 289, type: 'Air', layout: 'single', height: 158, power: 4, sockets: ['AM5', 'LGA1700'] },
+    { id: 'ls720', name: 'DeepCool LS720 360 AIO', brand: 'deepcool', price: 479, type: 'AIO', radiator: 360, power: 12, sockets: ['AM5', 'LGA1700'] },
+    { id: 'galahad2-360', name: 'Lian Li Galahad II Trinity 360', brand: 'lianli', price: 599, type: 'AIO', radiator: 360, power: 12, sockets: ['AM5', 'LGA1700'] },
+    { id: 'kraken-elite-280', name: 'NZXT Kraken Elite 280 AIO', brand: 'nzxt', price: 749, type: 'AIO', radiator: 280, power: 11, sockets: ['AM5', 'LGA1700'] }
   ],
 
   ram: [
@@ -97,7 +159,13 @@ export const PARTS = {
     { id: 'd5-48-7200', name: 'G.Skill Trident Z5 RGB DDR5 48GB (2×24)', brand: 'gskill', price: 899, ramType: 'DDR5', capacity: 48, sticks: 2, speed: 7200, power: 14, rgb: true },
     { id: 'd4-16-3600', name: 'Corsair Vengeance DDR4 16GB (2×8)', brand: 'corsair', price: 229, ramType: 'DDR4', capacity: 16, sticks: 2, speed: 3600, power: 8, rgb: false },
     { id: 'd4-32-3200', name: 'Kingston Fury DDR4 32GB (2×16)', brand: 'kingston', price: 399, ramType: 'DDR4', capacity: 32, sticks: 2, speed: 3200, power: 10, rgb: true },
-    { id: 'd4-64-3600', name: 'G.Skill Ripjaws DDR4 64GB (2×32)', brand: 'gskill', price: 749, ramType: 'DDR4', capacity: 64, sticks: 2, speed: 3600, power: 14, rgb: false }
+    { id: 'd4-64-3600', name: 'G.Skill Ripjaws DDR4 64GB (2×32)', brand: 'gskill', price: 749, ramType: 'DDR4', capacity: 64, sticks: 2, speed: 3600, power: 14, rgb: false },
+    { id: 'd5-16-5200', name: 'Corsair Vengeance DDR5 16GB (2×8)', brand: 'corsair', price: 299, ramType: 'DDR5', capacity: 16, sticks: 2, speed: 5200, power: 9, rgb: false },
+    { id: 'd5-24-6400', name: 'G.Skill Trident Z5 DDR5 24GB (2×12)', brand: 'gskill', price: 449, ramType: 'DDR5', capacity: 24, sticks: 2, speed: 6400, power: 11, rgb: true },
+    { id: 'd5-32-6400', name: 'Corsair Dominator Platinum DDR5 32GB (2×16)', brand: 'corsair', price: 699, ramType: 'DDR5', capacity: 32, sticks: 2, speed: 6400, power: 12, rgb: true },
+    { id: 'd5-32-6800', name: 'G.Skill Trident Z5 RGB DDR5 32GB (2×16)', brand: 'gskill', price: 749, ramType: 'DDR5', capacity: 32, sticks: 2, speed: 6800, power: 13, rgb: true },
+    { id: 'd5-96-6800', name: 'Corsair Vengeance DDR5 96GB (2×48)', brand: 'corsair', price: 1599, ramType: 'DDR5', capacity: 96, sticks: 2, speed: 6800, power: 17, rgb: false },
+    { id: 'd4-16-3200', name: 'Kingston Fury Beast DDR4 16GB (2×8)', brand: 'kingston', price: 199, ramType: 'DDR4', capacity: 16, sticks: 2, speed: 3200, power: 7, rgb: false }
   ],
 
   gpu: [
@@ -108,7 +176,14 @@ export const PARTS = {
     { id: 'rtx4090', name: 'NVIDIA GeForce RTX 4090', price: 7499, length: 336, power: 450, vram: 24, brand: 'nvidia', fans: 3, slot: 3.5 },
     { id: 'rx7600', name: 'AMD Radeon RX 7600', price: 1049, length: 204, power: 165, vram: 8, brand: 'amd', fans: 2, slot: 2 },
     { id: 'rx7800xt', name: 'AMD Radeon RX 7800 XT', price: 2099, length: 267, power: 263, vram: 16, brand: 'amd', fans: 2, slot: 2.5 },
-    { id: 'rx7900xtx', name: 'AMD Radeon RX 7900 XTX', price: 3899, length: 287, power: 355, vram: 24, brand: 'amd', fans: 3, slot: 3 }
+    { id: 'rx7900xtx', name: 'AMD Radeon RX 7900 XTX', price: 3899, length: 287, power: 355, vram: 24, brand: 'amd', fans: 3, slot: 3 },
+    { id: 'rtx5060ti', name: 'NVIDIA GeForce RTX 5060 Ti', price: 2099, length: 242, power: 180, vram: 16, brand: 'nvidia', fans: 2, slot: 2 },
+    { id: 'rtx5070', name: 'NVIDIA GeForce RTX 5070', price: 2649, length: 242, power: 250, vram: 12, brand: 'nvidia', fans: 2, slot: 2 },
+    { id: 'rtx5070ti', name: 'NVIDIA GeForce RTX 5070 Ti', price: 3449, length: 304, power: 300, vram: 16, brand: 'nvidia', fans: 3, slot: 3 },
+    { id: 'rtx5080', name: 'NVIDIA GeForce RTX 5080', price: 4499, length: 304, power: 360, vram: 16, brand: 'nvidia', fans: 3, slot: 3 },
+    { id: 'rtx5090', name: 'NVIDIA GeForce RTX 5090', price: 9499, length: 359, power: 575, vram: 32, brand: 'nvidia', fans: 3, slot: 3.5 },
+    { id: 'rx9060xt', name: 'AMD Radeon RX 9060 XT', price: 1799, length: 245, power: 160, vram: 16, brand: 'amd', fans: 2, slot: 2.5 },
+    { id: 'rx9070xt', name: 'AMD Radeon RX 9070 XT', price: 3999, length: 300, power: 304, vram: 16, brand: 'amd', fans: 3, slot: 3 }
   ],
 
   storage: [
@@ -117,7 +192,13 @@ export const PARTS = {
     { id: 'sn850x-2tb', name: 'WD Black SN850X 2TB NVMe', brand: 'wd', price: 1300, interface: 'NVMe', capacity: 2000, power: 8, form: 'M.2' },
     { id: 'p3-1tb', name: 'Crucial P3 1TB NVMe', brand: 'crucial', price: 549, interface: 'NVMe', capacity: 1000, power: 5, form: 'M.2' },
     { id: '870evo-1tb', name: 'Samsung 870 EVO 1TB SATA', brand: 'samsung', price: 749, interface: 'SATA', capacity: 1000, power: 4, form: '2.5"' },
-    { id: 'barracuda-2tb', name: 'Seagate Barracuda 2TB HDD', brand: 'seagate', price: 269, interface: 'SATA', capacity: 2000, power: 6, form: '3.5"' }
+    { id: 'barracuda-2tb', name: 'Seagate Barracuda 2TB HDD', brand: 'seagate', price: 269, interface: 'SATA', capacity: 2000, power: 6, form: '3.5"' },
+    { id: 'sn850x-1tb', name: 'WD Black SN850X 1TB NVMe', brand: 'wd', price: 750, interface: 'NVMe', capacity: 1000, power: 7, form: 'M.2' },
+    { id: '990pro-4tb', name: 'Samsung 990 PRO 4TB NVMe', brand: 'samsung', price: 2899, interface: 'NVMe', capacity: 4000, power: 10, form: 'M.2' },
+    { id: 'p310-2tb', name: 'Crucial P310 2TB NVMe', brand: 'crucial', price: 899, interface: 'NVMe', capacity: 2000, power: 6, form: 'M.2' },
+    { id: 'sn580-1tb', name: 'WD Blue SN580 1TB NVMe', brand: 'wd', price: 499, interface: 'NVMe', capacity: 1000, power: 5, form: 'M.2' },
+    { id: 'blue-4tb', name: 'WD Blue 4TB HDD', brand: 'wd', price: 449, interface: 'SATA', capacity: 4000, power: 7, form: '3.5"' },
+    { id: 'ironwolf-4tb', name: 'Seagate IronWolf 4TB NAS', brand: 'seagate', price: 699, interface: 'SATA', capacity: 4000, power: 8, form: '3.5"' }
   ],
 
   psu: [
@@ -126,7 +207,13 @@ export const PARTS = {
     { id: 'rm850x', name: 'Corsair RM850x 850W Gold', brand: 'Corsair', price: 599, wattage: 850, efficiency: '80+ Gold', modular: 'Full' },
     { id: 'focus-1000', name: 'Seasonic Focus GX-1000', brand: 'Seasonic', price: 749, wattage: 1000, efficiency: '80+ Gold', modular: 'Full' },
     { id: 'gf3-1000', name: 'Thermaltake Toughpower GF3 1000W', brand: 'Thermaltake', price: 699, wattage: 1000, efficiency: '80+ Gold', modular: 'Full' },
-    { id: 'dark-power-1200', name: 'be quiet! Dark Power 13 1200W', brand: 'be quiet!', price: 949, wattage: 1200, efficiency: '80+ Titanium', modular: 'Full' }
+    { id: 'dark-power-1200', name: 'be quiet! Dark Power 13 1200W', brand: 'be quiet!', price: 949, wattage: 1200, efficiency: '80+ Titanium', modular: 'Full' },
+    { id: 'focus-gx-650', name: 'Seasonic Focus GX-650', brand: 'Seasonic', price: 449, wattage: 650, efficiency: '80+ Gold', modular: 'Full' },
+    { id: 'rm1000e', name: 'Corsair RM1000e 1000W', brand: 'Corsair', price: 749, wattage: 1000, efficiency: '80+ Gold', modular: 'Full' },
+    { id: 'rmx-shift-750', name: 'Corsair RM750x Shift', brand: 'Corsair', price: 649, wattage: 750, efficiency: '80+ Gold', modular: 'Full' },
+    { id: 'sf750', name: 'Corsair SF750 Platinum SFX', brand: 'Corsair', price: 799, wattage: 750, efficiency: '80+ Platinum', modular: 'Full' },
+    { id: 'hydro-gpro-850', name: 'FSP Hydro G Pro 850W', brand: 'FSP', price: 629, wattage: 850, efficiency: '80+ Gold', modular: 'Full' },
+    { id: 'rog-strix-850', name: 'ASUS ROG Strix 850W Gold', brand: 'ASUS', price: 799, wattage: 850, efficiency: '80+ Gold', modular: 'Full' }
   ]
 };
 

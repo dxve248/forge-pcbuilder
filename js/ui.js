@@ -6,6 +6,7 @@ import { CATEGORIES, PARTS } from './data/parts.js';
 import { evaluateCompatibility } from './data/rules.js';
 import { formatPrice } from './currency.js';
 import { buyLinks } from './retailers.js';
+import { priceMeta, priceMetaText } from './prices.js';
 
 function fmtCapacity(gb) {
   return gb >= 1000 ? `${(gb / 1000).toFixed(gb % 1000 === 0 ? 0 : 1)}TB` : `${gb}GB`;
@@ -92,6 +93,7 @@ export class UI {
       compare: document.getElementById('compare'),
       totalPrice: document.getElementById('total-price'),
       partCount: document.getElementById('part-count'),
+      priceMeta: document.getElementById('price-meta'),
       powerFill: document.getElementById('power-fill'),
       powerText: document.getElementById('power-text'),
       compat: document.getElementById('compat'),
@@ -133,10 +135,6 @@ export class UI {
     document.getElementById('btn-view').addEventListener('click', () => this.viewer.resetView());
     const spin = document.getElementById('toggle-spin');
     spin.addEventListener('change', () => this.viewer.setAutoRotate(spin.checked));
-    const shadow = document.getElementById('toggle-shadow');
-    shadow.addEventListener('change', () => this.viewer.setQuality({ ao: shadow.checked }));
-    const glow = document.getElementById('toggle-glow');
-    glow.addEventListener('change', () => this.viewer.setQuality({ bloom: glow.checked }));
     const panel = document.getElementById('toggle-panel');
     panel.addEventListener('change', () => this.viewer.setSidePanel(panel.checked));
 
@@ -357,6 +355,10 @@ export class UI {
   _renderSummary() {
     const { store } = this;
     this.el.totalPrice.textContent = formatPrice(store.totalPrice);
+    if (this.el.priceMeta) {
+      this.el.priceMeta.classList.toggle('live', priceMeta.mode === 'live');
+      this.el.priceMeta.textContent = priceMetaText();
+    }
 
     const installedCount = store.categories.filter(c => store.build[c]).length;
     this.el.partCount.textContent = `${installedCount} / ${store.categories.length} parts`;
@@ -453,7 +455,7 @@ export class UI {
       ${notice}
       <div class="buy-list">${rows}</div>
       <div class="buy-total"><span>Parts subtotal</span><span>${formatPrice(store.totalPrice)}</span></div>
-      <div class="buy-disclaimer">Indicative UAE retail prices in AED (incl. VAT). Availability and final price vary by retailer.</div>`;
+      <div class="buy-disclaimer">${priceMetaText()}. Indicative UAE retail prices in AED (incl. VAT). Availability and final price vary by retailer.</div>`;
   }
 
   _renderHud() {

@@ -99,6 +99,42 @@ main {
   grid-template-columns: 300px 1fr 336px;
 }
 
+/* ---------- responsive ---------- */
+@media (max-width: 1180px) {
+  main { grid-template-columns: 262px 1fr 292px; }
+  .topbar { padding: 8px 14px; }
+}
+
+@media (max-width: 960px) {
+  html, body { overflow-y: auto; }
+  #app { height: auto; min-height: 100vh; }
+  main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 56vh auto;
+    overflow-y: auto;
+  }
+  .viewport { grid-row: 1; min-height: 0; }
+  .sidebar {
+    grid-row: 2;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary {
+    grid-row: 3;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+  .categories { flex-direction: row; overflow-x: auto; }
+  .tab { white-space: nowrap; }
+}
+
+@media (max-width: 680px) {
+  main { grid-template-rows: 46vh auto; }
+  .toolbar { justify-content: center; }
+  .partlist { padding: 10px 10px 20px; }
+  .total-price { font-size: 24px; }
+}
+
 /* ---------- sidebar ---------- */
 .sidebar {
   min-height: 0;
@@ -302,6 +338,8 @@ main {
   color: transparent;
 }
 .part-count { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+.price-meta { font-size: 11px; color: var(--text-faint); margin-top: 4px; font-style: italic; }
+.price-meta.live { color: var(--accent); font-style: normal; }
 
 .power-bar {
   height: 10px;

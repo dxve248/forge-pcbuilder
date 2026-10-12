@@ -6,8 +6,6 @@ import { OrbitControls } from '../vendor/OrbitControls.js';
 import { RoomEnvironment } from '../vendor/RoomEnvironment.js';
 import { EffectComposer } from '../vendor/postprocessing/EffectComposer.js';
 import { RenderPass } from '../vendor/postprocessing/RenderPass.js';
-import { SSAOPass } from '../vendor/postprocessing/SSAOPass.js';
-import { UnrealBloomPass } from '../vendor/postprocessing/UnrealBloomPass.js';
 import { OutlinePass } from '../vendor/postprocessing/OutlinePass.js';
 import { OutputPass } from '../vendor/postprocessing/OutputPass.js';
 import { LAYOUT, buildPart, disposeGroup } from './models.js';
@@ -55,13 +53,11 @@ export class Viewer {
     this.highlighted = null;
     this.clock = new THREE.Clock();
 
-    // Quality tiers, overridable via URL (e.g. ?ao=0&bloom=0) for tuning
-    // and low-end machines.
+    // Selection outline only (glow/SSAO were removed for speed).
+    // Overridable via URL (?outline=0) for low-end machines.
     const qs = new URLSearchParams(location.search);
     this._params = qs;
     this.quality = {
-      ao: qs.get('ao') !== '0',
-      bloom: qs.get('bloom') !== '0',
       outline: qs.get('outline') !== '0'
     };
 
@@ -190,25 +186,7 @@ export class Viewer {
       this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-      // Ambient occlusion grounds the parts inside the case.
-      if (this.quality.ao) {
-        const qs = this._params;
-        const num = (key, def) => {
-          const v = parseFloat(qs.get(key));
-          return Number.isFinite(v) ? v : def;
-        };
-        const ssao = new SSAOPass(this.scene, this.camera, w, h);
-        ssao.kernelRadius = num('aorad', 5.0);   // world units
-        ssao.minDistance = num('aomin', 0.0007);
-        ssao.maxDistance = num('aomax', 0.018);
-        ssao.output = SSAOPass.OUTPUT.Default;
-        const strength = num('aostr', 1.0);
-        if (ssao.blurMaterial) ssao.blurMaterial.uniforms.aoStrength.value = strength;
-        this.ssao = ssao;
-        this.composer.addPass(ssao);
-      }
-
-      // Selection outline.
+      // Selection outline (only post effect kept — cheap vs. the old SSAO/bloom).
       if (this.quality.outline) {
         const outline = new OutlinePass(new THREE.Vector2(w, h), this.scene, this.camera, []);
         outline.edgeStrength = 4.0;
@@ -219,11 +197,6 @@ export class Viewer {
         outline.hiddenEdgeColor.set('#20313f');
         this.outline = outline;
         this.composer.addPass(outline);
-      }
-
-      if (this.quality.bloom) {
-        this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.72, 0.62, 0.72);
-        this.composer.addPass(this.bloom);
       }
 
       this.composer.addPass(new OutputPass());
@@ -271,10 +244,14 @@ export class Viewer {
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
     const hits = this.raycaster.intersectObjects(this.buildGroup.children, true);
-    for (const hit of hits) {
+    pick: for (const hit of hits) {
       let node = hit.object;
-      while (node && !node.userData.category) node = node.parent;
-      if (node) { this.onSelect(node.userData.category); return; }
+      while (node) {
+        // side panels are click-through so the case interior stays reachable
+        if (node.userData.sidePanel) continue pick;
+        if (node.userData.category) { this.onSelect(node.userData.category); return; }
+        node = node.parent;
+      }
     }
     this.onSelect(null);
   }
@@ -408,10 +385,8 @@ export class Viewer {
 
   setAutoRotate(on) { this.controls.autoRotate = on; }
 
-  /** Toggle post-processing effects at runtime. */
-  setQuality({ ao, bloom, outline } = {}) {
-    if (ao !== undefined && this.ssao) this.ssao.enabled = ao;
-    if (bloom !== undefined && this.bloom) this.bloom.enabled = bloom;
+  /** Enable/disable the selection outline at runtime. */
+  setQuality({ outline } = {}) {
     if (outline !== undefined && this.outline) this.outline.enabled = outline;
     this._dirty = true;
   }

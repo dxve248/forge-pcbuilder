@@ -1,0 +1,11 @@
+{
+  "name": "forge-pcbuilder",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vanilla HTML/CSS/JS + Three.js 3D PC builder with cached AED price sync.",
+  "scripts": {
+    "start": "node server.mjs",
+    "sync-prices": "node js/update-prices.mjs"
+  }
+}
