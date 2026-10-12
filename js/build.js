@@ -53,6 +53,24 @@ export class BuildStore {
     this._emit();
   }
 
+  /** Plain { category: partId } for the installed parts only (for storage/URLs). */
+  toObject() {
+    const out = {};
+    for (const id of CATEGORY_IDS) {
+      if (this.build[id]) out[id] = this.build[id].id;
+    }
+    return out;
+  }
+
+  /** Install a saved build from a { category: partId } map (ignores unknown ids). */
+  load(map) {
+    for (const id of CATEGORY_IDS) {
+      const pid = map && map[id];
+      this.build[id] = (pid && PARTS_BY_ID[pid]) || null;
+    }
+    this._emit();
+  }
+
   /** Build a sensible, fully-compatible system in one click. */
   random(seed) {
     const rnd = seed === undefined || seed === null || seed === '' ? Math.random : mulberry32(Number(seed) >>> 0);
@@ -105,5 +123,40 @@ export class BuildStore {
 
   get categories() {
     return CATEGORY_IDS;
+  }
+}
+
+// --- build serialization (shareable URLs) -----------------------------------
+
+const _b64 = typeof btoa === 'function'
+  ? s => btoa(s)
+  : s => Buffer.from(s, 'utf8').toString('base64');
+const _a64 = typeof atob === 'function'
+  ? s => atob(s)
+  : s => Buffer.from(s, 'base64').toString('utf8');
+
+/** Encode a { category: partId } build into a compact base64url string. */
+export function encodeBuild(map) {
+  const json = JSON.stringify(map || {});
+  const utf8 = encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, h) =>
+    String.fromCharCode(parseInt(h, 16)));
+  return _b64(utf8)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/** Decode a base64url build string; returns null when malformed. */
+export function decodeBuild(str) {
+  try {
+    const b64 = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    const latin = _a64(b64);
+    const escaped = Array.from(latin, c => {
+      const code = c.charCodeAt(0);
+      return code < 128 ? c : '%' + code.toString(16).toUpperCase().padStart(2, '0');
+    }).join('');
+    return JSON.parse(decodeURIComponent(escaped));
+  } catch {
+    return null;
   }
 }

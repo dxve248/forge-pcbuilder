@@ -1,7 +1,10 @@
-import { BuildStore } from './build.js';
+import { BuildStore, decodeBuild } from './build.js';
 import { Viewer } from './scene.js';
 import { UI } from './ui.js';
 import { loadLivePrices } from './prices.js';
+import { applyDocumentLang } from './i18n.js';
+
+applyDocumentLang();
 
 const store = new BuildStore();
 const viewer = new Viewer(document.getElementById('canvas-wrap'));
@@ -18,15 +21,46 @@ store.subscribe(s => {
   }
 });
 
-// Start with a compatible showcase build. A ?seed= URL param makes the
-// random build reproducible (handy for testing/screenshots).
-const seed = new URLSearchParams(location.search).get('seed');
-store.random(seed === null ? undefined : seed);
+// Restoration order: a ?build= share link wins, then the locally saved build,
+// otherwise the seeded random showcase build.
+const params = new URLSearchParams(location.search);
+const SAVE_KEY = 'forgepc-build';
+const saveBuild = map => {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(map)); } catch { /* ignore */ }
+};
+const readLocalBuild = () => {
+  try { return JSON.parse(localStorage.getItem(SAVE_KEY)) || null; } catch { return null; }
+};
 
-// Optional real models & prices: swap parts once configured.
+const shared = params.get('build');
+if (shared) {
+  const map = decodeBuild(shared);
+  if (map && Object.keys(map).length) store.load(map);
+  else store.random(params.get('seed') === null ? undefined : params.get('seed'));
+} else {
+  const local = readLocalBuild();
+  if (local && Object.keys(local).length) {
+    store.load(local);
+  } else {
+    const seed = params.get('seed');
+    store.random(seed === null ? undefined : seed);
+  }
+}
+
+// Autosave after the restore, so the initial emit keeps the restored build.
+store.subscribe(s => saveBuild(s.toObject()));
+
 // Live prices (from the cache updated by `npm run sync-prices`) overlay the
 // catalog estimates as soon as they load.
 loadLivePrices().then(() => ui.render());
+
+// Offline/installable shell (PWA) on localhost + HTTPS.
+if ('serviceWorker' in navigator &&
+    (location.protocol === 'https:' ||
+     location.hostname === 'localhost' ||
+     location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+}
 
 // Expose for quick console tinkering.
 window.pcBuilder = { store, viewer, ui };

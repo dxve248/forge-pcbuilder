@@ -4,14 +4,14 @@
 // Prices are hand-set UAE retail estimates in AED (incl. VAT).
 
 export const CATEGORIES = [
-  { id: 'case', label: 'Case', icon: '🖥️' },
-  { id: 'motherboard', label: 'Motherboard', icon: '🧩' },
-  { id: 'cpu', label: 'CPU', icon: '🧠' },
-  { id: 'cooler', label: 'CPU Cooler', icon: '❄️' },
-  { id: 'ram', label: 'Memory', icon: '📊' },
-  { id: 'gpu', label: 'Graphics Card', icon: '🎮' },
-  { id: 'storage', label: 'Storage', icon: '💾' },
-  { id: 'psu', label: 'Power Supply', icon: '🔌' }
+  { id: 'case', label: 'Case', labelAr: 'الصندوق', icon: '🖥️' },
+  { id: 'motherboard', label: 'Motherboard', labelAr: 'اللوحة الأم', icon: '🧩' },
+  { id: 'cpu', label: 'CPU', labelAr: 'المعالج', icon: '🧠' },
+  { id: 'cooler', label: 'CPU Cooler', labelAr: 'مبرد المعالج', icon: '❄️' },
+  { id: 'ram', label: 'Memory', labelAr: 'الذاكرة', icon: '📊' },
+  { id: 'gpu', label: 'Graphics Card', labelAr: 'كرت الشاشة', icon: '🎮' },
+  { id: 'storage', label: 'Storage', labelAr: 'التخزين', icon: '💾' },
+  { id: 'psu', label: 'Power Supply', labelAr: 'مزود الطاقة', icon: '🔌' }
 ];
 
 export const PARTS = {

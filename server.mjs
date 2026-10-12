@@ -4,9 +4,16 @@ import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { promisify } from 'node:util';
+import { gzip, brotliCompress } from 'node:zlib';
+
+const gzipP = promisify(gzip);
+const brP = promisify(brotliCompress);
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.argv[2] || process.env.PORT || 5173);
+
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -34,6 +41,22 @@ async function readPriceCache() {
   }
 }
 
+// Compressed variants are cached in memory so each asset is encoded once.
+const encCache = new Map(); // `${filePath}#${encoding}` -> Buffer
+async function compress(file, data, encoding) {
+  const key = `${file}#${encoding}`;
+  let out = encCache.get(key);
+  if (!out) {
+    out = encoding === 'br'
+      ? await brP(data)
+      : encoding === 'gzip'
+        ? await gzipP(data, { level: 6 })
+        : data;
+    encCache.set(key, out);
+  }
+  return out;
+}
+
 http.createServer(async (req, res) => {
   try {
     if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -49,7 +72,7 @@ http.createServer(async (req, res) => {
         : { mode: 'estimate', checkedAt: null, prices: {} });
       res.writeHead(200, {
         'Content-Type': TYPES['.json'],
-        'Content-Length': body.length,
+        'Content-Length': Buffer.byteLength(body),
         'Cache-Control': 'no-store, must-revalidate'
       });
       return res.end(req.method === 'HEAD' ? undefined : body);
@@ -63,17 +86,48 @@ http.createServer(async (req, res) => {
     }
 
     const info = await stat(file);
-    if (info.isDirectory()) return send(res, 404, 'Not found');
+    if (!info.isFile()) return send(res, 404, 'Not found');
 
     const data = await readFile(file);
-    res.writeHead(200, {
+
+    // Strong ETag derived from the content, so responses can be cached and
+    // revalidated cheaply (304) after the browser's short max-age.
+    const hash = createHash('sha1').update(data).digest('hex').slice(0, 20);
+    const etag = `"${hash}"`;
+    // Node's HTTP parser strips the surrounding quotes on if-none-match.
+    if (req.headers['if-none-match'] === hash) {
+      res.writeHead(304, { ETag: etag, 'Cache-Control': 'public, max-age=3600' });
+      return res.end();
+    }
+
+    // Apply content negotiation for /api and the HTML route; everything
+    // else has Cache-Control pointing at the immutable-ish ETag above.
+    const isHtml = extname(file).toLowerCase() === '.html';
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    let encoding = null;
+    if (!isHtml && (acceptEncoding.includes('br') || acceptEncoding.includes('gzip'))) {
+      encoding = acceptEncoding.includes('br') ? 'br' : 'gzip';
+    }
+
+    const head = {
       'Content-Type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream',
-      'Content-Length': data.length,
-      'Cache-Control': 'no-store, must-revalidate'
-    });
+      'ETag': etag,
+      'Cache-Control': isHtml ? 'public, no-cache' : 'public, max-age=3600',
+      'Vary': 'Accept-Encoding'
+    };
+    if (encoding) {
+      const payload = await compress(file, data, encoding);
+      head['Content-Encoding'] = encoding;
+      head['Content-Length'] = payload.length;
+      res.writeHead(200, head);
+      return res.end(req.method === 'HEAD' ? undefined : payload);
+    }
+    head['Content-Length'] = data.length;
+    res.writeHead(200, head);
     res.end(req.method === 'HEAD' ? undefined : data);
-  } catch {
-    send(res, 404, 'Not found');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return send(res, 404, 'Not found');
+    send(res, 500, 'Internal error');
   }
 }).listen(PORT, () => {
   console.log(`\n  ForgePC running at  http://localhost:${PORT}\n  Press Ctrl+C to stop.\n`);

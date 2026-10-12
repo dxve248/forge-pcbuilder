@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M8 6h48v52H8z' fill='%23166d6a'/%3E%3Ctext x='32' y='42' font-family='Segoe UI,Arial' font-size='26' font-weight='700' fill='%23eceff4' text-anchor='middle'%3EFP%3C/text%3E%3C/svg%3E" />
   <title>ForgePC — 3D PC Builder</title>
   <link rel="stylesheet" href="css/styles.css" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0c11" />
   <script type="importmap">
   {
     "imports": {
@@ -25,8 +28,17 @@
         <button id="btn-random" class="btn primary">🎲 Random Build</button>
         <button id="btn-reset" class="btn">↺ Reset</button>
         <button id="btn-view" class="btn">⛶ Reset View</button>
-        <label class="toggle"><input type="checkbox" id="toggle-spin" checked /> Auto-rotate</label>
-        <label class="toggle"><input type="checkbox" id="toggle-panel" checked /> Side panels</label>
+        <button id="btn-share" class="btn">🔗 Share</button>
+        <button id="btn-shot" class="btn" title="Download a high-res screenshot">📷</button>
+        <label class="toggle"><input type="checkbox" id="toggle-spin" checked /><span id="toggle-spin-label"> Auto-rotate</span></label>
+        <label class="toggle"><input type="checkbox" id="toggle-panel" checked /><span id="toggle-panel-label"> Side panels</span></label>
+        <select id="sel-currency" class="sort" title="Display currency">
+          <option value="AED">AED</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+        </select>
+        <label class="toggle" title="Prices include UAE VAT"><input type="checkbox" id="toggle-vat" checked /> VAT</label>
+        <button id="btn-lang" class="btn" title="Toggle language">ع / EN</button>
       </div>
     </header>
 
@@ -49,13 +61,14 @@
         <div id="canvas-wrap"></div>
         <div class="hud" id="hud"></div>
         <div class="compare" id="compare" hidden></div>
+        <div class="pick-tip" id="pick-tip" hidden></div>
         <div class="viewer-hint">Drag to orbit · Scroll to zoom · Right-drag to pan · Click a part to inspect</div>
       </section>
 
       <aside class="summary">
         <div class="panel totals">
           <div class="total-row">
-            <span class="total-label">Total build</span>
+            <span class="total-label" id="total-label">Total build</span>
             <span class="total-price" id="total-price">AED 0</span>
           </div>
           <div class="part-count" id="part-count">0 / 8 parts</div>
@@ -63,28 +76,30 @@
         </div>
 
         <div class="panel power-panel">
-          <div class="panel-title">Estimated Power</div>
+          <div class="panel-title" id="power-title">Estimated Power</div>
           <div class="power-bar"><div class="power-fill" id="power-fill"></div></div>
           <div class="power-text" id="power-text">0 W</div>
         </div>
 
         <div class="panel compat-panel">
-          <div class="panel-title">Compatibility</div>
+          <div class="panel-title" id="compat-title">Compatibility</div>
           <div class="compat" id="compat"></div>
         </div>
 
         <div class="panel build-panel">
-          <div class="panel-title">Your Build</div>
+          <div class="panel-title" id="build-title">Your Build</div>
           <div class="build-list" id="build-list"></div>
         </div>
 
         <div class="panel buy-panel">
-          <div class="panel-title">Where to Buy</div>
+          <div class="panel-title" id="buy-title">Where to Buy</div>
           <div class="buy" id="buy"></div>
         </div>
       </aside>
     </main>
   </div>
+
+  <div class="toast" id="toast" hidden></div>
 
   <script type="module" src="js/main.js"></script>
 </body>

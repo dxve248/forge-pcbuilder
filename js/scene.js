@@ -45,13 +45,28 @@ function makeBackdropTexture() {
   return tex;
 }
 
+/**
+ * Three.js viewport for the build: owns the renderer, camera, lighting and
+ * orbit controls, keeps a THREE.Group per installed category, and provides
+ * click/hover picking with click-through side panels.
+ *
+ * Public API: setPart, markBad, setSidePanel, highlight, focusOn, resetView,
+ * setAutoRotate, screenshot, setQuality, resize, dispose.
+ */
 export class Viewer {
+  /**
+   * @param {HTMLElement} container - element the canvas is appended to.
+   * @param {{ onSelect?: (category: string|null) => void }} [opts]
+   */
   constructor(container, { onSelect } = {}) {
     this.container = container;
     this.onSelect = onSelect || (() => {});
     this.parts = new Map();       // category -> THREE.Group
     this.highlighted = null;
     this.clock = new THREE.Clock();
+    this._spinners = new Set();   // fan blade groups animated in _tick
+    this._bad = new Set();        // categories with compatibility errors
+    this.onHover = null;          // fn({ category, partId, x, y } | null)
 
     // Selection outline only (glow/SSAO were removed for speed).
     // Overridable via URL (?outline=0) for low-end machines.
@@ -65,6 +80,7 @@ export class Viewer {
     this._camTween = null;
 
     this._initRenderer();
+    this._autoTune();
     this._initScene();
     this._initLights();
     this._initGround();
@@ -111,6 +127,32 @@ export class Viewer {
     this.renderer.toneMappingExposure = 1.02;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.container.appendChild(this.renderer.domElement);
+  }
+
+  /**
+   * Adaptive performance fallback: on software rasterizers (SwiftShader,
+   * llvmpipe) or when forced with ?low=1, drop to pixel-ratio 1 and turn
+   * the selection outline off. Explicit ?dpr= / ?outline= override this.
+   */
+  _autoTune() {
+    const qs = this._params;
+    const explicitOutline = qs.get('outline') !== null;
+    const explicitDpr = qs.get('dpr') !== null;
+    let low = qs.get('low') === '1';
+    if (!low && !explicitOutline && !explicitDpr) {
+      try {
+        const gl = this.renderer.getContext();
+        const info = gl.getExtension('WEBGL_debug_renderer_info');
+        const name = info
+          ? (gl.getParameter(info.UNMASKED_RENDERER_WEBGL) || '').toLowerCase()
+          : '';
+        low = /swiftshader|llvmpipe|software|basic renderer/i.test(name);
+      } catch { /* keep tuned defaults */ }
+    }
+    if (low) {
+      this.quality.outline = false;
+      this.renderer.setPixelRatio(1);
+    }
   }
 
   _initScene() {
@@ -226,6 +268,9 @@ export class Viewer {
   _initPicking() {
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
+    this._lastHoverCat = null;
+    this._lastHoverX = 0;
+    this._lastHoverZ = 0;
     let downX = 0, downY = 0;
 
     const el = this.renderer.domElement;
@@ -235,28 +280,75 @@ export class Viewer {
       if (Math.hypot(e.clientX - downX, e.clientY - downY) > 5) return;
       this._pick(e);
     });
+
+    // hover affordance (throttled): pointer cursor + onHover hook for the
+    // part-name tooltip in the UI.
+    let hoverAt = 0;
+    el.addEventListener('pointermove', e => {
+      const now = performance.now();
+      if (now - hoverAt < 60) return;
+      hoverAt = now;
+      this._hover(e);
+    });
+    el.addEventListener('pointerleave', () => this._setHover(null));
   }
 
-  _pick(event) {
+  _raycastPoint(e) {
     const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointer, this.camera);
+    return this.raycaster.intersectObjects(this.buildGroup.children, true);
+  }
 
-    const hits = this.raycaster.intersectObjects(this.buildGroup.children, true);
-    pick: for (const hit of hits) {
+  _firstSelectable(hits) {
+    for (const hit of hits) {
       let node = hit.object;
       while (node) {
-        // side panels are click-through so the case interior stays reachable
-        if (node.userData.sidePanel) continue pick;
-        if (node.userData.category) { this.onSelect(node.userData.category); return; }
+        if (node.userData.sidePanel) break;
+        if (node.userData.category) {
+          return {
+            category: node.userData.category,
+            partId: node.userData.partId || null,
+            x: hit.point.x, y: hit.point.y, z: hit.point.z
+          };
+        }
         node = node.parent;
       }
     }
-    this.onSelect(null);
+    return null;
+  }
+
+  _hover(e) {
+    const info = this._firstSelectable(this._raycastPoint(e));
+    this._setHover(info);
+  }
+
+  _setHover(info) {
+    const el = this.renderer.domElement;
+    const cat = info ? info.category : null;
+    el.style.cursor = cat ? 'pointer' : 'default';
+    if (cat === this._lastHoverCat &&
+        info && Math.abs(info.x - this._lastHoverX) + Math.abs(info.z - this._lastHoverZ) < 6) {
+      return; // same part, near enough — avoid redundant DOM churn
+    }
+    this._lastHoverCat = cat;
+    this._lastHoverX = info ? info.x : 0;
+    this._lastHoverZ = info ? info.z : 0;
+    if (this.onHover) this.onHover(info);
+  }
+
+  _pick(event) {
+    const info = this._firstSelectable(this._raycastPoint(event));
+    this.onSelect(info ? info.category : null);
   }
 
   // -- part management -----------------------------------------------------
+  /**
+   * Install (or clear) a part's 3D model for a category.
+   * @param {string} category
+   * @param {object|null} part - catalog part object, or null to remove it.
+   */
   setPart(category, part) {
     const existing = this.parts.get(category);
     if (existing) {
@@ -280,10 +372,32 @@ export class Viewer {
     // clones, so a part may arrive already carrying a stale highlight)
     this._applyHighlight();
     this._applySidePanel();
+    this._rebuildSpinners();
+    this._dirty = true;
+  }
+
+  /** Collect fan blade groups from every installed part (spun in _tick). */
+  _rebuildSpinners() {
+    this._spinners.clear();
+    for (const group of this.parts.values()) {
+      group.traverse(o => { if (o.userData.spin) this._spinners.add(o); });
+    }
+  }
+
+  /** Categories with compatibility errors get a red selection outline. */
+  /**
+   * Categories with unresolved compatibility errors get a red selection
+   * outline instead of the normal highlight colour.
+   * @param {string[]} [categories]
+   */
+  markBad(categories) {
+    this._bad = new Set(categories || []);
+    this._applyHighlight();
     this._dirty = true;
   }
 
   /** Show or hide the case's removable side panel. */
+  /** Show or hide the two glass side panels as click-through overlays. */
   setSidePanel(on) {
     this._sidePanel = on;
     this._applySidePanel();
@@ -296,6 +410,7 @@ export class Viewer {
     if (group) group.traverse(o => { if (o.userData.sidePanel) o.visible = on; });
   }
 
+  /** Select a category (cyan outline + glow) or clear the selection. */
   highlight(category) {
     if (this.highlighted === category) return;
     this.highlighted = category;
@@ -308,6 +423,14 @@ export class Viewer {
     if (this.outline) {
       const group = this.highlighted ? this.parts.get(this.highlighted) : null;
       this.outline.selectedObjects = group ? [group] : [];
+      const bad = this.highlighted && this._bad.has(this.highlighted);
+      if (bad) {
+        this.outline.visibleEdgeColor.set('#ff5470');
+        this.outline.hiddenEdgeColor.set('#4a1620');
+      } else {
+        this.outline.visibleEdgeColor.set('#7fe9ff');
+        this.outline.hiddenEdgeColor.set('#20313f');
+      }
     }
     for (const [cat, group] of this.parts) {
       const on = cat === this.highlighted;
@@ -365,6 +488,7 @@ export class Viewer {
     this._pauseRotate();
   }
 
+  /** Tween the camera back to the default framing of the whole case. */
   resetView() {
     this._camTween = {
       t: 0,
@@ -383,7 +507,40 @@ export class Viewer {
     }
   }
 
+  /** Enable or disable camera auto-rotation. */
   setAutoRotate(on) { this.controls.autoRotate = on; }
+
+  /**
+   * Render the current view to a PNG data URL at `scale`× the container
+   * size (capped at 2560×1920). Rendering / pixel ratio is restored after.
+   * @param {number} [scale=2] - resolution multiplier.
+   */
+  screenshot(scale = 2) {
+    const w0 = this.container.clientWidth || 1;
+    const h0 = this.container.clientHeight || 1;
+    const w = Math.min(2560, Math.round(w0 * Math.max(1, scale)));
+    const h = Math.min(1920, Math.round(h0 * Math.max(1, scale)));
+    const prevPr = this.renderer.getPixelRatio();
+    const prevAspect = this.camera.aspect;
+
+    this.renderer.setPixelRatio(1);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h, false);
+    if (this.composer) this.composer.setSize(w, h);
+    this.controls.update();
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
+    const url = this.renderer.domElement.toDataURL('image/png');
+
+    this.renderer.setPixelRatio(prevPr);
+    this.camera.aspect = prevAspect;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w0, h0, false);
+    if (this.composer) this.composer.setSize(w0, h0);
+    this._dirty = true;
+    return url;
+  }
 
   /** Enable/disable the selection outline at runtime. */
   setQuality({ outline } = {}) {
@@ -391,6 +548,7 @@ export class Viewer {
     this._dirty = true;
   }
 
+  /** Re-size the renderer to match its container (call on layout changes). */
   resize() {
     const w = this.container.clientWidth || 1;
     const h = this.container.clientHeight || 1;
@@ -426,6 +584,14 @@ export class Viewer {
         group.scale.setScalar(Math.max(0.001, eased));
         animating = true;
       }
+    }
+
+    // spinning fans (case + GPU + cooler) keep the loop alive while fitted;
+    // rotation happens in each fan's local frame so orientation is handled.
+    if (this._spinners.size) {
+      const a = dt * 16;
+      for (const s of this._spinners) s.rotation.z += a;
+      animating = true;
     }
 
     // camera focus animation (ease-in-out); user interaction cancels it

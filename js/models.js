@@ -157,9 +157,9 @@ function glassMat() {
 // panel is removed from the toolbar.
 function sideGlassMat() {
   return new THREE.MeshPhysicalMaterial({
-    color: 0x141d24, metalness: 0.2, roughness: 0.07,
-    transparent: true, opacity: 0.72, ior: 1.5,
-    envMapIntensity: 2.0, side: THREE.DoubleSide,
+    color: 0x152028, metalness: 0.0, roughness: 0.04,
+    transparent: true, opacity: 0.68, ior: 1.5,
+    envMapIntensity: 2.6, side: THREE.DoubleSide,
     clearcoat: 1, clearcoatRoughness: 0.03
   });
 }
@@ -221,6 +221,7 @@ function bladeGeometry(radius) {
 function buildFan(radius, opts = {}) {
   const { color = 0x00e0c6, frameColor = 0x14171c, blades = 9, rgb = false } = opts;
   const g = new THREE.Group();
+  g.userData.fan = true;
   const frameMat = solidMat(frameColor, 0.7, 0.25);
   const barW = radius * 0.22;
   const depth = radius * 0.5;
@@ -241,6 +242,7 @@ function buildFan(radius, opts = {}) {
   for (let i = 0; i < blades; i++) {
     const arm = new THREE.Group();
     arm.rotation.z = (i / blades) * Math.PI * 2;
+    arm.userData.spin = true;
     const b = new THREE.Mesh(bladeGeometry(radius), bladeMat);
     b.castShadow = true;
     b.rotation.x = 0.5;
@@ -726,6 +728,14 @@ export const BUILDERS = {
   psu: buildPSU
 };
 
+/**
+ * Build a THREE.Group for a catalog part, or null when the category has no
+ * builder. Clones from a per-part cache so geometry/materials are shared; the
+ * clone is tagged with the part id for picking.
+ * @param {string} category
+ * @param {object} part
+ * @returns {THREE.Group|null}
+ */
 export function buildPart(category, part) {
   const fn = BUILDERS[category];
   if (!fn) return null;

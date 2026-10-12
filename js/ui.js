@@ -4,9 +4,26 @@
 
 import { CATEGORIES, PARTS } from './data/parts.js';
 import { evaluateCompatibility } from './data/rules.js';
-import { formatPrice } from './currency.js';
+import { formatPrice, vatLabel } from './currency.js';
 import { buyLinks } from './retailers.js';
-import { priceMeta, priceMetaText } from './prices.js';
+import { priceMeta } from './prices.js';
+import { getSettings, updateSettings } from './settings.js';
+import { t, categoryLabel, categoryLabelById, isArabic, applyDocumentLang } from './i18n.js';
+import { encodeBuild } from './build.js';
+
+// label -> category for attributing compatibility errors to the offending
+// installed part (drives the red selection outline in the 3D view).
+const ISSUE_CATEGORY = {
+  'CPU socket': 'cpu',
+  'Memory type': 'ram',
+  'Cooler mount': 'cooler',
+  'Form factor': 'motherboard',
+  'GPU clearance': 'gpu',
+  'Cooler clearance': 'cooler',
+  'Radiator fit': 'cooler',
+  'Power supply': 'psu',
+  'Storage': 'storage'
+};
 
 function fmtCapacity(gb) {
   return gb >= 1000 ? `${(gb / 1000).toFixed(gb % 1000 === 0 ? 0 : 1)}TB` : `${gb}GB`;
@@ -99,12 +116,45 @@ export class UI {
       compat: document.getElementById('compat'),
       buildList: document.getElementById('build-list'),
       buy: document.getElementById('buy'),
-      hud: document.getElementById('hud')
+      hud: document.getElementById('hud'),
+      pickTip: document.getElementById('pick-tip'),
+      toast: document.getElementById('toast'),
+      currency: document.getElementById('sel-currency'),
+      vat: document.getElementById('toggle-vat'),
+      lang: document.getElementById('btn-lang')
     };
 
     this._buildTabs();
     this._wireControls();
     store.subscribe(() => this.render());
+    this._applyI18n();
+  }
+
+  /** Localise toolbar/sidebar chrome for the active language. */
+  _applyI18n() {
+    const set = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = text;
+    };
+    set('btn-random', t('random'));
+    set('btn-reset', t('reset'));
+    set('btn-view', t('resetView'));
+    set('btn-share', t('share'));
+    set('total-label', t('total'));
+    set('power-title', t('powerTitle'));
+    set('compat-title', t('compatTitle'));
+    set('build-title', t('yourBuild'));
+    set('buy-title', t('whereToBuy'));
+    const spin = document.getElementById('toggle-spin-label');
+    const panel = document.getElementById('toggle-panel-label');
+    if (spin) spin.textContent = ' ' + t('autoRotate');
+    if (panel) panel.textContent = ' ' + t('sidePanels');
+    this.el.search.placeholder = t('searchPlaceholder');
+    for (const o of this.el.sort.options) {
+      o.textContent = { recommended: t('sortRecommended'), 'price-asc': t('sortAsc'), 'price-desc': t('sortDesc'), name: t('sortName') }[o.value] || o.textContent;
+    }
+    const hint = document.querySelector('.viewer-hint');
+    if (hint) hint.textContent = t('viewerHint');
   }
 
   _buildTabs() {
@@ -115,7 +165,7 @@ export class UI {
       btn.dataset.category = cat.id;
       btn.innerHTML = `
         <span class="tab-icon">${cat.icon}</span>
-        <span class="tab-label">${cat.label}</span>
+        <span class="tab-label">${categoryLabel(cat)}</span>
         <span class="tab-dot" data-dot="${cat.id}"></span>`;
       btn.addEventListener('click', () => {
         this.activeCategory = cat.id;
@@ -138,6 +188,30 @@ export class UI {
     const panel = document.getElementById('toggle-panel');
     panel.addEventListener('change', () => this.viewer.setSidePanel(panel.checked));
 
+    document.getElementById('btn-share').addEventListener('click', () => this._shareBuild());
+    document.getElementById('btn-shot').addEventListener('click', () => this._screenshot());
+
+    this.el.currency.value = getSettings().currency;
+    this.el.currency.addEventListener('change', () => {
+      updateSettings({ currency: this.el.currency.value });
+      this._clearFilters();
+      this.render();
+    });
+
+    this.el.vat.checked = getSettings().vat;
+    this.el.vat.addEventListener('change', () => {
+      updateSettings({ vat: this.el.vat.checked });
+      this.render();
+    });
+
+    this.el.lang.addEventListener('click', () => {
+      updateSettings({ lang: isArabic() ? 'en' : 'ar' });
+      applyDocumentLang();
+      this._buildTabs();
+      this._applyI18n();
+      this.render();
+    });
+
     this.el.search.addEventListener('input', () => {
       this.query = this.el.search.value.trim().toLowerCase();
       this._renderList();
@@ -158,6 +232,64 @@ export class UI {
       this.viewer.focusOn(category);
       this.render();
     };
+
+    // hover tooltip over 3D parts — positioned at the cursor because the
+    // viewer only reports world-space hit points.
+    this.viewer.onHover = info => {
+      const tip = this.el.pickTip;
+      if (!info) { tip.hidden = true; return; }
+      const part = (PARTS[info.category] || []).find(p => p.id === info.partId);
+      const name = part ? part.name : categoryLabelById(info.category);
+      tip.textContent = name;
+      const rect = this.viewer.renderer.domElement.getBoundingClientRect();
+      const cur = this._cursor;
+      tip.hidden = false;
+      if (cur) {
+        tip.style.left = (cur.clientX - rect.left + 14) + 'px';
+        tip.style.top = (cur.clientY - rect.top - 30) + 'px';
+      } else {
+        tip.style.left = '50%';
+        tip.style.top = '12px';
+      }
+    };
+    const can = this.viewer.renderer.domElement;
+    can.addEventListener('pointermove', e => { this._cursor = { clientX: e.clientX, clientY: e.clientY }; });
+    can.addEventListener('pointerleave', () => { this._cursor = null; });
+  }
+
+  _toast(text) {
+    const t = this.el.toast;
+    if (!t) return;
+    t.textContent = text;
+    t.hidden = false;
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+  }
+
+  async _shareBuild() {
+    try {
+      const url = new URL(location.href);
+      url.searchParams.set('build', encodeBuild(this.store.toObject()));
+      await navigator.clipboard.writeText(url.href);
+      this._toast(t('copied'));
+    } catch {
+      this._toast(t('copied'));
+    }
+  }
+
+  _screenshot() {
+    try {
+      const url = this.viewer.screenshot(2);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'forgepc-build.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      this._toast(t('shotDone'));
+    } catch (e) {
+      console.warn('screenshot failed', e);
+    }
   }
 
   /** Reset the per-category search + comparison selection. */
@@ -194,6 +326,16 @@ export class UI {
     this._renderSummary();
     this._renderBuy();
     this._renderHud();
+
+    // red selection outline for installed parts with compatibility errors
+    const bad = new Set();
+    for (const c of this.store.compatibility) {
+      if (c.level === 'error' && ISSUE_CATEGORY[c.label]) {
+        const cat = ISSUE_CATEGORY[c.label];
+        if (this.store.build[cat]) bad.add(cat);
+      }
+    }
+    this.viewer.markBad([...bad]);
   }
 
   _visibleParts() {
@@ -223,14 +365,14 @@ export class UI {
 
     const header = document.createElement('div');
     header.className = 'list-header';
-    header.innerHTML = `<span>${CATEGORIES.find(c => c.id === cat).label}</span>
-      ${installed ? `<button class="link-btn" data-remove="${cat}">Remove</button>` : ''}`;
+    header.innerHTML = `<span>${categoryLabelById(cat)}</span>
+      ${installed ? `<button class="link-btn" data-remove="${cat}">${t('remove')}</button>` : ''}`;
     this.el.list.appendChild(header);
 
     if (!list.length) {
       const empty = document.createElement('div');
       empty.className = 'list-empty';
-      empty.textContent = 'No parts match your search.';
+      empty.textContent = t('noMatch');
       this.el.list.appendChild(empty);
       return;
     }
@@ -238,15 +380,21 @@ export class UI {
     for (const part of list) {
       const isInstalled = installed && installed.id === part.id;
       const inCompare = this.compareIds.includes(part.id);
+      const issues = this._compatIssues(cat, part);
+      const hasError = issues.some(i => i.level === 'error');
+      const hasIssue = issues.length > 0;
       const card = document.createElement('button');
-      card.className = 'part-card' + (isInstalled ? ' installed' : '') + (inCompare ? ' comparing' : '');
+      card.className = 'part-card' +
+        (isInstalled ? ' installed' : '') +
+        (inCompare ? ' comparing' : '') +
+        (hasIssue ? (hasError ? ' has-error' : ' has-warn') : '');
       card.innerHTML = `
         <div class="part-main">
-          <span class="part-name">${part.name}</span>
+          <span class="part-name">${part.name}${hasIssue ? `<span class="issue-badge" title="${issues.map(i => `${i.label}: ${i.detail}`).join('\n')}">⚠ ${issues.length}</span>` : ''}</span>
           <span class="part-spec">${SPEC_FMT[cat] ? SPEC_FMT[cat](part) : ''}</span>
         </div>
         <span class="part-price">${formatPrice(part.price)}</span>
-        <span class="cmp-toggle${inCompare ? ' on' : ''}" title="Add to comparison" role="button" tabindex="0">⇄</span>`;
+        <span class="cmp-toggle${inCompare ? ' on' : ''}" title="${t('compare')}" role="button" tabindex="0">⇄</span>`;
       card.addEventListener('click', () => this._install(cat, part.id));
       const toggle = card.querySelector('.cmp-toggle');
       toggle.addEventListener('click', e => {
@@ -299,8 +447,8 @@ export class UI {
 
     const head = document.createElement('div');
     head.className = 'compare-head';
-    head.innerHTML = `<span class="cmp-title">⇄ Compare ${parts.length}</span>
-      <button class="cmp-clear" type="button">Clear</button>`;
+    head.innerHTML = `<span class="cmp-title">${t('compare')} ${parts.length}</span>
+      <button class="cmp-clear" type="button">${t('clear')}</button>`;
 
     const table = document.createElement('table');
     table.className = 'compare-table';
@@ -311,7 +459,7 @@ export class UI {
     for (const p of parts) {
       const issues = this._compatIssues(cat, p);
       const badge = issues.length
-        ? `<span class="cmp-badge ${issues.some(i => i.level === 'error') ? 'error' : 'warn'}" title="${issues.map(i => `${i.label}: ${i.detail}`).join('\n')}">${issues.length} issue${issues.length > 1 ? 's' : ''}</span>`
+        ? `<span class="cmp-badge ${issues.some(i => i.level === 'error') ? 'error' : 'warn'}" title="${issues.map(i => `${i.label}: ${i.detail}`).join('\n')}">${t('issueFmt', { n: issues.length, s: issues.length > 1 ? 's' : '' })}</span>`
         : '';
       const th = document.createElement('th');
       th.innerHTML = `
@@ -357,11 +505,11 @@ export class UI {
     this.el.totalPrice.textContent = formatPrice(store.totalPrice);
     if (this.el.priceMeta) {
       this.el.priceMeta.classList.toggle('live', priceMeta.mode === 'live');
-      this.el.priceMeta.textContent = priceMetaText();
+      this.el.priceMeta.textContent = this._priceMetaText();
     }
 
     const installedCount = store.categories.filter(c => store.build[c]).length;
-    this.el.partCount.textContent = `${installedCount} / ${store.categories.length} parts`;
+    this.el.partCount.textContent = t('partsFmt', { a: installedCount, b: store.categories.length });
 
     // power bar
     const draw = store.power;
@@ -373,7 +521,7 @@ export class UI {
     else if (pct > 85) level = 'high';
     else if (pct > 65) level = 'mid';
     this.el.powerFill.className = `power-fill ${level}`;
-    this.el.powerText.textContent = cap ? `${draw} W / ${cap} W` : `${draw} W estimated`;
+    this.el.powerText.textContent = cap ? `${draw} W / ${cap} W` : `${draw} W ${t('powerEst')}`;
 
     // compatibility
     const checks = store.compatibility;
@@ -396,7 +544,7 @@ export class UI {
       row.className = 'build-row' + (part ? '' : ' empty');
       row.innerHTML = `
         <span class="build-icon">${meta.icon}</span>
-        <span class="build-name">${part ? part.name : 'Not selected'}</span>
+        <span class="build-name">${part ? part.name : t('notSelected')}</span>
         <span class="build-price">${part ? formatPrice(part.price) : '—'}</span>`;
       row.addEventListener('click', () => {
         this.activeCategory = cat;
@@ -410,16 +558,29 @@ export class UI {
     }
   }
 
+  /** Localised price freshness badge without importing priceMetaText. */
+  _priceMetaText() {
+    if (priceMeta.mode === 'live' && priceMeta.checkedAt) {
+      const d = new Date(priceMeta.checkedAt + 'T12:00:00');
+      const locale = isArabic() ? 'ar' : 'en';
+      if (!Number.isNaN(d.getTime())) {
+        return `${t('asOf')} ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(d)}`;
+      }
+      return t('latestSync');
+    }
+    return t('estimateTag');
+  }
+
   _renderBuy() {
     const { store } = this;
     const box = this.el.buy;
     const missing = store.categories.filter(c => !store.build[c]);
 
     if (missing.length) {
-      const names = missing.map(id => CATEGORIES.find(c => c.id === id).label).join(' · ');
+      const names = missing.map(id => categoryLabelById(id)).join(t('sep') === '·' ? ' · ' : '، ');
       box.innerHTML = `
-        <div class="buy-intro">Finish your build to see where to buy every part in the UAE.</div>
-        <div class="buy-missing"><b>Still needed:</b> ${names}</div>`;
+        <div class="buy-intro">${t('buyIntro')}</div>
+        <div class="buy-missing"><b>${t('stillNeeded')}</b> ${names}</div>`;
       return;
     }
 
@@ -427,11 +588,11 @@ export class UI {
     const warnings = store.compatibility.filter(c => c.level === 'warn');
     let notice;
     if (errors.length) {
-      notice = `<div class="buy-intro bad">⚠ ${errors.length} compatibility issue${errors.length > 1 ? 's' : ''} — fix before ordering.</div>`;
+      notice = `<div class="buy-intro bad">${errors.length === 1 ? t('buyErr1', { n: errors.length }) : t('buyErrN', { n: errors.length })}</div>`;
     } else if (warnings.length) {
-      notice = `<div class="buy-intro warn">Complete build with ${warnings.length} warning${warnings.length > 1 ? 's' : ''}.</div>`;
+      notice = `<div class="buy-intro warn">${warnings.length === 1 ? t('buyWarn1', { n: warnings.length }) : t('buyWarnN', { n: warnings.length })}</div>`;
     } else {
-      notice = `<div class="buy-intro ok">✓ Build complete &amp; compatible — shop the list below.</div>`;
+      notice = `<div class="buy-intro ok">${t('buyOk')}</div>`;
     }
 
     const rows = store.categories.slice().reverse().map(cat => {
@@ -454,8 +615,8 @@ export class UI {
     box.innerHTML = `
       ${notice}
       <div class="buy-list">${rows}</div>
-      <div class="buy-total"><span>Parts subtotal</span><span>${formatPrice(store.totalPrice)}</span></div>
-      <div class="buy-disclaimer">${priceMetaText()}. Indicative UAE retail prices in AED (incl. VAT). Availability and final price vary by retailer.</div>`;
+      <div class="buy-total"><span>${t('subtotal')}</span><span>${formatPrice(store.totalPrice)}</span></div>
+      <div class="buy-disclaimer">${this._priceMetaText()} · ${t('buyDisclaimer', { vat: vatLabel() })}</div>`;
   }
 
   _renderHud() {
@@ -469,14 +630,18 @@ export class UI {
     if (!part) { hud.classList.remove('visible'); return; }
 
     const meta = CATEGORIES.find(c => c.id === category);
+    const issues = this._compatIssues(category, part);
+    const bad = issues.filter(i => i.level === 'error');
+    const warn = issues.filter(i => i.level === 'warn');
     hud.classList.add('visible');
     hud.innerHTML = `
-      <div class="hud-tag">${meta.icon} ${meta.label}</div>
+      <div class="hud-tag">${meta.icon} ${categoryLabel(meta)}</div>
       <div class="hud-name">${part.name}</div>
       <div class="hud-spec">${SPEC_FMT[category] ? SPEC_FMT[category](part) : ''}</div>
+      ${bad.length || warn.length ? `<div class="hud-warn${bad.length ? ' error' : ''}">⚠ ${t('hudIssues', { n: issues.length, s: issues.length > 1 ? 's' : '' })}</div>` : ''}
       <div class="hud-row">
         <span class="hud-price">${formatPrice(part.price)}</span>
-        <button class="hud-remove" id="hud-remove">Remove</button>
+        <button class="hud-remove" id="hud-remove">${t('remove')}</button>
       </div>`;
     hud.querySelector('#hud-remove').addEventListener('click', () => {
       this.store.clear(category);
