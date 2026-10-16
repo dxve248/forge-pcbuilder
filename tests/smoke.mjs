@@ -70,6 +70,59 @@ const EXPRS = [
     await pcBuilder.ui._shareBuild().catch(() => {});
     await new Promise(r => setTimeout(r, 250));
     return { shown: !toast.hidden && toast.textContent.length > 0, url: (location.search.indexOf('build=') >= 0 ? location.href : 'no-build-param') };
+  })()`,
+  // undo / redo
+  `(() => {
+    const P = window.pcBuilder;
+    const cat = P.ui.activeCategory;
+    const beforeId = P.store.build[cat] ? P.store.build[cat].id : null;
+    const list = P.ui._visibleParts();
+    const target = list.find(p => p.id !== beforeId) || list[0];
+    P.ui._install(cat, target.id);
+    const installed = P.store.build[cat] && P.store.build[cat].id === target.id;
+    const canUndo = P.store.canUndo;
+    P.store.undo();
+    const afterId = P.store.build[cat] ? P.store.build[cat].id : null;
+    const canRedo = P.store.canRedo;
+    return { installed, canUndo, reverted: afterId === beforeId, canRedo, ok: installed && canUndo && afterId === beforeId && canRedo };
+  })()`,
+  // budget advisor
+  `(() => {
+    const P = window.pcBuilder;
+    P.store.reset();
+    P.ui.el.budgetInput.value = '6000';
+    P.ui._applyBudget();
+    const count = P.store.categories.filter(c => P.store.build[c]).length;
+    return { count, ok: count >= 6 };
+  })()`,
+  // saved builds library
+  `(() => {
+    const P = window.pcBuilder;
+    const orig = window.prompt;
+    window.prompt = () => 'CI probe';
+    P.ui._saveCurrentBuild();
+    P.ui._renderSavesMenu();
+    const n = document.querySelectorAll('#saves-menu .save-item').length;
+    window.prompt = orig;
+    localStorage.removeItem('forgepc-builds');
+    return { n, ok: n >= 1 };
+  })()`,
+  // cross-category comparison table
+  `(() => {
+    const P = window.pcBuilder;
+    P.ui.compareItems = [];
+    const gpu = P.ui._visibleParts();
+    P.ui._toggleCompare(P.ui.activeCategory, gpu[0].id);
+    P.ui._toggleCompare(P.ui.activeCategory, gpu[1].id);
+    P.ui.activeCategory = 'cpu';
+    const cpu = P.ui._visibleParts();
+    P.ui._toggleCompare('cpu', cpu[0].id);
+    P.ui._toggleCompare('cpu', cpu[1].id);
+    const groups = document.querySelectorAll('#compare .cmp-group').length;
+    const hidden = document.getElementById('compare').hidden;
+    P.ui.compareItems = [];
+    P.ui._renderCompare();
+    return { groups, hidden, ok: groups >= 2 && !hidden };
   })()`
 ];
 
@@ -147,6 +200,10 @@ async function run(wsUrl) {
   const tip = out.results[3] || {};
   const shot = out.results[4] || {};
   const share = out.results[5] || {};
+  const undo = out.results[6] || {};
+  const budget = out.results[7] || {};
+  const saves = out.results[8] || {};
+  const cmp = out.results[9] || {};
   const syntheticPickOk = ex => /setPointerCapture/.test(ex);
   out.debug = {
     click: click.smoke === 'SMOKE_OK',
@@ -155,6 +212,10 @@ async function run(wsUrl) {
     tip: !tip.hidden && tip.text.length > 0,
     shot: !!shot.ok,
     share: !!share.shown,
+    undo: !!undo.ok,
+    budget: !!budget.ok,
+    saves: !!saves.ok,
+    compare: !!cmp.ok,
     exceptionsFiltered: out.exceptions.every(syntheticPickOk)
   };
   out.pass = Boolean(
@@ -164,6 +225,10 @@ async function run(wsUrl) {
     !tip.hidden && tip.text.length > 0 &&
     shot.ok &&
     share.shown &&
+    undo.ok &&
+    budget.ok &&
+    saves.ok &&
+    cmp.ok &&
     out.exceptions.every(syntheticPickOk) &&
     out.errorLogs.length === 0 &&
     out.errors.length === 0

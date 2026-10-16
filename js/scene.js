@@ -9,6 +9,7 @@ import { RenderPass } from '../vendor/postprocessing/RenderPass.js';
 import { OutlinePass } from '../vendor/postprocessing/OutlinePass.js';
 import { OutputPass } from '../vendor/postprocessing/OutputPass.js';
 import { LAYOUT, buildPart, disposeGroup } from './models.js';
+import { getSettings, updateSettings } from './settings.js';
 
 // Default view framing (also used by Reset View).
 const HOME_POS = new THREE.Vector3(62, 40, 78);
@@ -45,6 +46,68 @@ function makeBackdropTexture() {
   return tex;
 }
 
+/** Whether the browser can create any WebGL context at all. */
+export function isWebGLAvailable() {
+  try {
+    const c = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl')));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Drop-in stand-in for {@link Viewer} when WebGL is unavailable or fails to
+ * initialise. It exposes the same surface the UI uses (so the 2D builder keeps
+ * working) but renders nothing; 3D-only actions become no-ops.
+ */
+export class NullViewer {
+  constructor(container, { message } = {}) {
+    this.container = container;
+    this.isFallback = true;
+    this.parts = new Map();
+    this.onSelect = () => {};
+    this.onHover = null;
+    this.renderer = { domElement: document.createElement('div') };
+    this.renderer.domElement.className = 'gl-fallback-surface';
+    container.appendChild(this.renderer.domElement);
+
+    const note = document.createElement('div');
+    note.className = 'gl-fallback-note';
+    note.setAttribute('role', 'status');
+    note.textContent = message || '3D preview unavailable on this device.';
+    container.appendChild(note);
+  }
+  setPart() {}
+  markBad() {}
+  setSidePanel() {}
+  setAutoRotate() {}
+  setQuality() {}
+  highlight() {}
+  focusOn() {}
+  resetView() {}
+  resize() {}
+  dispose() { this.container.replaceChildren(); }
+  screenshot() { throw new Error('3D preview unavailable'); }
+}
+
+/**
+ * Create the best viewer this device can support: a real {@link Viewer} when
+ * WebGL works, otherwise a graceful {@link NullViewer}.
+ * @param {HTMLElement} container
+ * @param {{ onSelect?: Function, message?: string }} [opts]
+ * @returns {Viewer|NullViewer}
+ */
+export function createViewer(container, opts = {}) {
+  if (!isWebGLAvailable()) return new NullViewer(container, opts);
+  try {
+    return new Viewer(container, opts);
+  } catch (err) {
+    console.warn('WebGL init failed — falling back to 2D-only mode:', err);
+    return new NullViewer(container, opts);
+  }
+}
+
 /**
  * Three.js viewport for the build: owns the renderer, camera, lighting and
  * orbit controls, keeps a THREE.Group per installed category, and provides
@@ -60,6 +123,7 @@ export class Viewer {
    */
   constructor(container, { onSelect } = {}) {
     this.container = container;
+    this.isFallback = false;
     this.onSelect = onSelect || (() => {});
     this.parts = new Map();       // category -> THREE.Group
     this.highlighted = null;
@@ -262,7 +326,23 @@ export class Viewer {
     controls.addEventListener('start', () => { this._camTween = null; });
     // moving the camera (drag, damping, auto-rotate) schedules a redraw
     controls.addEventListener('change', () => { this._dirty = true; });
+    // persist the final camera framing after an interaction settles
+    controls.addEventListener('end', () => updateSettings({ view: this.getView() }));
     this.controls = controls;
+
+    const saved = getSettings().view;
+    if (saved && Array.isArray(saved.pos) && Array.isArray(saved.target)) {
+      this.camera.position.set(...saved.pos);
+      controls.target.set(...saved.target);
+      controls.update();
+    }
+  }
+
+  /** Current camera framing as a serialisable { pos, target } pair. */
+  getView() {
+    const { position: p } = this.camera;
+    const { x, y, z } = this.controls.target;
+    return { pos: [p.x, p.y, p.z], target: [x, y, z] };
   }
 
   _initPicking() {

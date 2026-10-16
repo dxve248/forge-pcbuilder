@@ -8,6 +8,37 @@
   <link rel="stylesheet" href="css/styles.css" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0a0c11" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="description" content="ForgePC is a free 3D PC builder: pick parts in an interactive 3D case, get instant compatibility checks, power estimates and UAE price totals in AED, USD or EUR." />
+  <meta name="keywords" content="PC builder, 3D PC builder, custom PC, compatibility checker, PC parts, UAE, Dubai, AED" />
+  <meta name="author" content="ForgePC" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="./" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ForgePC" />
+  <meta property="og:title" content="ForgePC — 3D PC Builder" />
+  <meta property="og:description" content="Build a custom PC in 3D: instant compatibility checks, power estimates and UAE price totals." />
+  <meta property="og:image" content="icons/icon-512.png" />
+  <meta property="og:locale" content="en" />
+  <meta property="og:locale:alternate" content="ar" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ForgePC — 3D PC Builder" />
+  <meta name="twitter:description" content="Build a custom PC in 3D: instant compatibility checks, power estimates and UAE price totals." />
+  <meta name="twitter:image" content="icons/icon-512.png" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "ForgePC",
+    "applicationCategory": "UtilityApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "AED" },
+    "description": "Interactive 3D PC builder with compatibility checks, power estimates and regional pricing."
+  }
+  </script>
   <script type="importmap">
   {
     "imports": {
@@ -22,46 +53,49 @@
       <div class="brand">
         <span class="brand-mark">⛏</span>
         <span class="brand-name">Forge<span>PC</span></span>
-        <span class="brand-sub">3D Builder</span>
+        <span class="brand-sub" id="brand-sub">3D Builder</span>
       </div>
       <div class="toolbar">
         <button id="btn-random" class="btn primary">🎲 Random Build</button>
+        <button id="btn-undo" class="btn" aria-label="Undo" title="Undo (Ctrl+Z)">↶</button>
+        <button id="btn-redo" class="btn" aria-label="Redo" title="Redo (Ctrl+Y)">↷</button>
         <button id="btn-reset" class="btn">↺ Reset</button>
         <button id="btn-view" class="btn">⛶ Reset View</button>
         <button id="btn-share" class="btn">🔗 Share</button>
-        <button id="btn-shot" class="btn" title="Download a high-res screenshot">📷</button>
+        <button id="btn-saves" class="btn" aria-haspopup="true" aria-expanded="false" aria-controls="saves-menu">🗂 Builds</button>
+        <button id="btn-shot" class="btn" title="Download a high-res screenshot" aria-label="Screenshot">📷</button>
         <label class="toggle"><input type="checkbox" id="toggle-spin" checked /><span id="toggle-spin-label"> Auto-rotate</span></label>
         <label class="toggle"><input type="checkbox" id="toggle-panel" checked /><span id="toggle-panel-label"> Side panels</span></label>
-        <select id="sel-currency" class="sort" title="Display currency">
+        <select id="sel-currency" class="sort" aria-label="Display currency" title="Display currency">
           <option value="AED">AED</option>
           <option value="USD">USD</option>
           <option value="EUR">EUR</option>
         </select>
         <label class="toggle" title="Prices include UAE VAT"><input type="checkbox" id="toggle-vat" checked /> VAT</label>
-        <button id="btn-lang" class="btn" title="Toggle language">ع / EN</button>
+        <button id="btn-lang" class="btn" title="Toggle language" aria-label="Toggle language">ع / EN</button>
       </div>
     </header>
 
     <main>
       <aside class="sidebar">
-        <nav class="categories" id="categories"></nav>
+        <nav class="categories" id="categories" role="tablist" aria-label="Component categories"></nav>
         <div class="list-tools">
-          <input id="part-search" class="search" type="search" placeholder="Search parts…" autocomplete="off" />
-          <select id="part-sort" class="sort" title="Sort parts">
+          <input id="part-search" class="search" type="search" placeholder="Search parts…" autocomplete="off" aria-label="Search parts" />
+          <select id="part-sort" class="sort" title="Sort parts" aria-label="Sort parts">
             <option value="recommended">Sort: Recommended</option>
             <option value="price-asc">Price: low → high</option>
             <option value="price-desc">Price: high → low</option>
             <option value="name">Name: A → Z</option>
           </select>
         </div>
-        <div class="partlist" id="partlist"></div>
+        <div class="partlist" id="partlist" role="list"></div>
       </aside>
 
       <section class="viewport">
         <div id="canvas-wrap"></div>
         <div class="hud" id="hud"></div>
-        <div class="compare" id="compare" hidden></div>
-        <div class="pick-tip" id="pick-tip" hidden></div>
+        <div class="compare" id="compare" hidden role="region" aria-label="Part comparison"></div>
+        <div class="pick-tip" id="pick-tip" role="tooltip" hidden></div>
         <div class="viewer-hint">Drag to orbit · Scroll to zoom · Right-drag to pan · Click a part to inspect</div>
       </section>
 
@@ -69,10 +103,15 @@
         <div class="panel totals">
           <div class="total-row">
             <span class="total-label" id="total-label">Total build</span>
-            <span class="total-price" id="total-price">AED 0</span>
+            <span class="total-price" id="total-price" aria-live="polite">AED 0</span>
           </div>
           <div class="part-count" id="part-count">0 / 8 parts</div>
           <div class="price-meta" id="price-meta">Prices: AED estimates</div>
+          <div class="budget-row">
+            <label for="budget-input">Budget</label>
+            <input id="budget-input" class="budget-input" type="number" min="1000" step="500" placeholder="AED" inputmode="numeric" />
+            <button id="btn-budget" class="btn small">Build to budget</button>
+          </div>
         </div>
 
         <div class="panel power-panel">
@@ -99,7 +138,9 @@
     </main>
   </div>
 
-  <div class="toast" id="toast" hidden></div>
+  <div class="saves-menu" id="saves-menu" role="dialog" aria-label="Saved builds" hidden></div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script type="module" src="js/main.js"></script>
 </body>

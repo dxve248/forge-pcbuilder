@@ -27,7 +27,51 @@ const TYPES = {
   '.ico': 'image/x-icon'
 };
 
-const send = (res, status, body, headers = {}) => res.writeHead(status, headers).end(body);
+const send = (res, status, body, headers = {}) =>
+  res.writeHead(status, { ...SECURITY, ...headers }).end(body);
+
+// --- security headers -------------------------------------------------------
+// The only inline script in the page is the import map, so we hash it at boot
+// and allow just that one under a strict script-src (no 'unsafe-inline').
+async function inlineScriptHashes() {
+  try {
+    const html = await readFile(join(ROOT, 'index.html'), 'utf8');
+    const out = [];
+    const re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi;
+    let m;
+    while ((m = re.exec(html))) {
+      out.push(`'sha256-${createHash('sha256').update(m[1]).digest('base64')}'`);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+const SCRIPT_HASHES = await inlineScriptHashes();
+const CSP = [
+  "default-src 'self'",
+  `script-src 'self' ${SCRIPT_HASHES.join(' ')}`.trim(),
+  "style-src 'self'",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "worker-src 'self' blob:",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'"
+].join('; ');
+
+const SECURITY = {
+  'Content-Security-Policy': CSP,
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin'
+};
 
 // Live prices live in price-cache.json (refilled by js/update-prices.mjs).
 // When absent or fresh, the client falls back to the catalog estimates.
@@ -73,7 +117,8 @@ http.createServer(async (req, res) => {
       res.writeHead(200, {
         'Content-Type': TYPES['.json'],
         'Content-Length': Buffer.byteLength(body),
-        'Cache-Control': 'no-store, must-revalidate'
+        'Cache-Control': 'no-store, must-revalidate',
+        ...SECURITY
       });
       return res.end(req.method === 'HEAD' ? undefined : body);
     }
@@ -113,7 +158,8 @@ http.createServer(async (req, res) => {
       'Content-Type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream',
       'ETag': etag,
       'Cache-Control': isHtml ? 'public, no-cache' : 'public, max-age=3600',
-      'Vary': 'Accept-Encoding'
+      'Vary': 'Accept-Encoding',
+      ...SECURITY
     };
     if (encoding) {
       const payload = await compress(file, data, encoding);

@@ -1,10 +1,28 @@
 // ForgePC service worker: network-first for HTML, cache-first for the rest,
 // never caching the /api/prices endpoint so price syncs aren't stale.
 
-const CACHE = 'forgepc-v1';
+// Bump this single constant whenever shipped assets change; the activate
+// handler purges every cache that doesn't match the new name.
+const VERSION = 'v2';
+const CACHE = `forgepc-${VERSION}`;
 const API_PREFIX = '/api/prices';
 
-self.addEventListener('install', () => self.skipWaiting());
+// App shell precached on install so the builder opens offline.
+const PRECACHE = [
+  './',
+  './index.html',
+  './css/styles.css',
+  './js/main.js',
+  './manifest.json'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE)
+      .then(cache => cache.addAll(PRECACHE).catch(() => {}))
+      .then(() => self.skipWaiting())
+  );
+});
 
 self.addEventListener('activate', event => {
   event.waitUntil(

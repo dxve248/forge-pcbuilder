@@ -1,13 +1,15 @@
 import { BuildStore, decodeBuild } from './build.js';
-import { Viewer } from './scene.js';
+import { createViewer } from './scene.js';
 import { UI } from './ui.js';
 import { loadLivePrices } from './prices.js';
-import { applyDocumentLang } from './i18n.js';
+import { applyDocumentLang, t } from './i18n.js';
 
 applyDocumentLang();
 
 const store = new BuildStore();
-const viewer = new Viewer(document.getElementById('canvas-wrap'));
+const viewer = createViewer(document.getElementById('canvas-wrap'), {
+  message: t('webglUnavailable')
+});
 const ui = new UI(store, viewer);
 
 // Keep the 3D scene in sync with the build whenever it changes.
@@ -22,7 +24,8 @@ store.subscribe(s => {
 });
 
 // Restoration order: a ?build= share link wins, then the locally saved build,
-// otherwise the seeded random showcase build.
+// otherwise the seeded random showcase build. Initial loads skip history so
+// the very first Ctrl+Z doesn't wipe the restored build.
 const params = new URLSearchParams(location.search);
 const SAVE_KEY = 'forgepc-build';
 const saveBuild = map => {
@@ -35,12 +38,12 @@ const readLocalBuild = () => {
 const shared = params.get('build');
 if (shared) {
   const map = decodeBuild(shared);
-  if (map && Object.keys(map).length) store.load(map);
+  if (map && Object.keys(map).length) store.load(map, { history: false });
   else store.random(params.get('seed') === null ? undefined : params.get('seed'));
 } else {
   const local = readLocalBuild();
   if (local && Object.keys(local).length) {
-    store.load(local);
+    store.load(local, { history: false });
   } else {
     const seed = params.get('seed');
     store.random(seed === null ? undefined : seed);
@@ -49,6 +52,17 @@ if (shared) {
 
 // Autosave after the restore, so the initial emit keeps the restored build.
 store.subscribe(s => saveBuild(s.toObject()));
+
+// Undo / redo shortcuts (Ctrl/Cmd+Z, Ctrl+Y or Shift+Z).
+window.addEventListener('keydown', e => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (k === 'z' && !e.shiftKey) {
+    if (store.undo()) e.preventDefault();
+  } else if (k === 'y' || (k === 'z' && e.shiftKey)) {
+    if (store.redo()) e.preventDefault();
+  }
+});
 
 // Live prices (from the cache updated by `npm run sync-prices`) overlay the
 // catalog estimates as soon as they load.

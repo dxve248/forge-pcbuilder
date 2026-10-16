@@ -19,9 +19,11 @@ export const CURRENCY_OPTIONS = [
 
 function fmt(code, value) {
   const rounded = Math.round(value);
-  if (code === 'USD') return `$${rounded.toLocaleString('en-US')}`;
-  if (code === 'EUR') return `€${rounded.toLocaleString('en-US')}`;
-  return `AED ${rounded.toLocaleString('en-US')}`;
+  const locale = getSettings().lang === 'ar' ? 'ar-AE' : 'en-US';
+  const grouped = rounded.toLocaleString(locale);
+  if (code === 'USD') return `$${grouped}`;
+  if (code === 'EUR') return `€${grouped}`;
+  return `AED ${grouped}`;
 }
 
 /**

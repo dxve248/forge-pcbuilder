@@ -165,7 +165,9 @@ export const PARTS = {
     { id: 'd5-32-6400', name: 'Corsair Dominator Platinum DDR5 32GB (2×16)', brand: 'corsair', price: 699, ramType: 'DDR5', capacity: 32, sticks: 2, speed: 6400, power: 12, rgb: true },
     { id: 'd5-32-6800', name: 'G.Skill Trident Z5 RGB DDR5 32GB (2×16)', brand: 'gskill', price: 749, ramType: 'DDR5', capacity: 32, sticks: 2, speed: 6800, power: 13, rgb: true },
     { id: 'd5-96-6800', name: 'Corsair Vengeance DDR5 96GB (2×48)', brand: 'corsair', price: 1599, ramType: 'DDR5', capacity: 96, sticks: 2, speed: 6800, power: 17, rgb: false },
-    { id: 'd4-16-3200', name: 'Kingston Fury Beast DDR4 16GB (2×8)', brand: 'kingston', price: 199, ramType: 'DDR4', capacity: 16, sticks: 2, speed: 3200, power: 7, rgb: false }
+    { id: 'd4-16-3200', name: 'Kingston Fury Beast DDR4 16GB (2×8)', brand: 'kingston', price: 199, ramType: 'DDR4', capacity: 16, sticks: 2, speed: 3200, power: 7, rgb: false },
+    { id: 'd5-64-5600-4x', name: 'Corsair Vengeance DDR5 64GB (4×16)', brand: 'corsair', price: 1249, ramType: 'DDR5', capacity: 64, sticks: 4, speed: 5600, power: 18, rgb: false },
+    { id: 'd4-32-3600-4x', name: 'Corsair Vengeance DDR4 32GB (4×8)', brand: 'corsair', price: 429, ramType: 'DDR4', capacity: 32, sticks: 4, speed: 3600, power: 14, rgb: false }
   ],
 
   gpu: [
@@ -216,6 +218,28 @@ export const PARTS = {
     { id: 'rog-strix-850', name: 'ASUS ROG Strix 850W Gold', brand: 'ASUS', price: 799, wattage: 850, efficiency: '80+ Gold', modular: 'Full' }
   ]
 };
+
+// Extra capability attributes used by the compatibility rules. Kept as a
+// compact overlay so the catalog rows above stay one line each.
+const COOLER_TDP = {
+  'nh-d15': 250, 'ak620': 220, 'hyper-212': 150, 'dark-rock-pro-4': 250,
+  'kraken-240': 220, 'h150i-360': 300, 'gala-360': 350, 'pa120': 220,
+  'fuma3': 220, 'nh-u12s': 180, 'ls720': 300, 'galahad2-360': 300,
+  'kraken-elite-280': 250
+};
+const BOARD_SLOTS = {
+  'b650e-strix': 4, 'b650-tomahawk': 4, 'b650m-ds3h': 4, 'z790-strix': 4,
+  'z790-pro': 4, 'b760m-prime': 4, 'b760-itx': 2, 'x670e-aorus-master': 4,
+  'b650i-aorus-ultra': 2, 'b650-plus': 4, 'h610m-ddr4': 2,
+  'b760m-tomahawk': 4, 'z790-aorus-elite': 4
+};
+const GPU_CONNECTOR = { rtx4090: '12VHPWR', rtx5090: '12VHPWR' };
+const PSU_12VHPWR = new Set(['focus-1000', 'gf3-1000', 'dark-power-1200', 'rm1000e', 'rog-strix-850']);
+
+for (const p of PARTS.cooler) p.tdp = COOLER_TDP[p.id] ?? 200;
+for (const p of PARTS.motherboard) p.ramSlots = BOARD_SLOTS[p.id] ?? 4;
+for (const p of PARTS.gpu) p.connector = GPU_CONNECTOR[p.id] || 'PCIe';
+for (const p of PARTS.psu) p.pcie12vhpwr = PSU_12VHPWR.has(p.id);
 
 // Flat lookup by id for convenience.
 export const PARTS_BY_ID = {};

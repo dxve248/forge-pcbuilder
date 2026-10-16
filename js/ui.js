@@ -8,8 +8,10 @@ import { formatPrice, vatLabel } from './currency.js';
 import { buyLinks } from './retailers.js';
 import { priceMeta } from './prices.js';
 import { getSettings, updateSettings } from './settings.js';
-import { t, categoryLabel, categoryLabelById, isArabic, applyDocumentLang } from './i18n.js';
+import { t, categoryLabel, categoryLabelById, isArabic, applyDocumentLang, specLabel } from './i18n.js';
 import { encodeBuild } from './build.js';
+import { listBuilds, saveBuild, getBuild, deleteBuild } from './saved.js';
+import { planBudgetBuild } from './advisor.js';
 
 // label -> category for attributing compatibility errors to the offending
 // installed part (drives the red selection outline in the 3D view).
@@ -17,11 +19,14 @@ const ISSUE_CATEGORY = {
   'CPU socket': 'cpu',
   'Memory type': 'ram',
   'Cooler mount': 'cooler',
+  'Cooler capacity': 'cooler',
+  'Memory slots': 'ram',
   'Form factor': 'motherboard',
   'GPU clearance': 'gpu',
   'Cooler clearance': 'cooler',
   'Radiator fit': 'cooler',
   'Power supply': 'psu',
+  'PSU connector': 'psu',
   'Storage': 'storage'
 };
 
@@ -100,7 +105,7 @@ export class UI {
     this.selected = null; // { category, partId }
     this.query = '';
     this.sort = 'recommended';
-    this.compareIds = [];
+    this.compareItems = []; // [{ category, partId }] — works across categories
 
     this.el = {
       tabs: document.getElementById('categories'),
@@ -121,7 +126,13 @@ export class UI {
       toast: document.getElementById('toast'),
       currency: document.getElementById('sel-currency'),
       vat: document.getElementById('toggle-vat'),
-      lang: document.getElementById('btn-lang')
+      lang: document.getElementById('btn-lang'),
+      undo: document.getElementById('btn-undo'),
+      redo: document.getElementById('btn-redo'),
+      saves: document.getElementById('btn-saves'),
+      savesMenu: document.getElementById('saves-menu'),
+      budgetInput: document.getElementById('budget-input'),
+      budgetBtn: document.getElementById('btn-budget')
     };
 
     this._buildTabs();
@@ -134,17 +145,30 @@ export class UI {
   _applyI18n() {
     const set = (id, text) => {
       const el = document.getElementById(id);
-      if (el) el.innerHTML = text;
+      if (el) el.textContent = text;
     };
+    const label = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) { el.title = text; el.setAttribute('aria-label', text); }
+    };
+    set('brand-sub', t('brandSub'));
     set('btn-random', t('random'));
     set('btn-reset', t('reset'));
-    set('btn-view', t('resetView'));
-    set('btn-share', t('share'));
+    set('btn-saves', '🗂 ' + t('builds'));
+    set('btn-budget', t('buildToBudget'));
     set('total-label', t('total'));
     set('power-title', t('powerTitle'));
     set('compat-title', t('compatTitle'));
     set('build-title', t('yourBuild'));
     set('buy-title', t('whereToBuy'));
+    label('btn-undo', t('undo'));
+    label('btn-redo', t('redo'));
+    label('btn-view', t('resetView'));
+    label('btn-share', t('share'));
+    label('btn-shot', t('screenshot'));
+    const budgetLabel = document.querySelector('label[for="budget-input"]');
+    if (budgetLabel) budgetLabel.textContent = t('budget');
+    if (this.el.budgetInput) this.el.budgetInput.placeholder = t('budgetPh');
     const spin = document.getElementById('toggle-spin-label');
     const panel = document.getElementById('toggle-panel-label');
     if (spin) spin.textContent = ' ' + t('autoRotate');
@@ -157,25 +181,73 @@ export class UI {
     if (hint) hint.textContent = t('viewerHint');
   }
 
+  /** Disable the 3D-only controls when running in 2D-only fallback mode. */
+  _applyFallbackUI() {
+    if (!this.viewer.isFallback) return;
+    for (const id of ['btn-view', 'btn-shot', 'toggle-spin', 'toggle-panel']) {
+      const c = document.getElementById(id);
+      if (c) {
+        c.disabled = true;
+        const box = c.closest('.toggle');
+        if (box) box.title = t('webglUnavailable');
+      }
+    }
+  }
+
   _buildTabs() {
     this.el.tabs.innerHTML = '';
+    const buttons = [];
     for (const cat of CATEGORIES) {
       const btn = document.createElement('button');
       btn.className = 'tab';
+      btn.type = 'button';
+      btn.setAttribute('role', 'tab');
+      btn.setAttribute('aria-selected', 'false');
+      btn.tabIndex = -1;
+      btn.id = `tab-${cat.id}`;
       btn.dataset.category = cat.id;
       btn.innerHTML = `
-        <span class="tab-icon">${cat.icon}</span>
+        <span class="tab-icon" aria-hidden="true">${cat.icon}</span>
         <span class="tab-label">${categoryLabel(cat)}</span>
         <span class="tab-dot" data-dot="${cat.id}"></span>`;
-      btn.addEventListener('click', () => {
-        this.activeCategory = cat.id;
-        this.selected = null;
-        this._clearFilters();
-        this.viewer.highlight(null);
-        this.viewer.focusOn(null);
-        this.render();
-      });
+      btn.addEventListener('click', () => this._activateCategory(cat.id));
+      btn.addEventListener('keydown', e => this._onTabKey(e, cat.id));
       this.el.tabs.appendChild(btn);
+      buttons.push(btn);
+    }
+    this._syncTabAria();
+  }
+
+  _activateCategory(id) {
+    this.activeCategory = id;
+    this.selected = null;
+    this._clearFilters();
+    this.viewer.highlight(null);
+    this.viewer.focusOn(null);
+    this.render();
+    const tab = document.getElementById(`tab-${id}`);
+    if (tab) tab.focus();
+  }
+
+  /** Roving-tabindex keyboard navigation between category tabs. */
+  _onTabKey(e, id) {
+    const ids = CATEGORIES.map(c => c.id);
+    const i = ids.indexOf(id);
+    let next = null;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = ids[(i + 1) % ids.length];
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = ids[(i - 1 + ids.length) % ids.length];
+    else if (e.key === 'Home') next = ids[0];
+    else if (e.key === 'End') next = ids[ids.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    this._activateCategory(next);
+  }
+
+  _syncTabAria() {
+    for (const btn of this.el.tabs.children) {
+      const active = btn.dataset.category === this.activeCategory;
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.tabIndex = active ? 0 : -1;
     }
   }
 
@@ -183,13 +255,38 @@ export class UI {
     document.getElementById('btn-reset').addEventListener('click', () => this.store.reset());
     document.getElementById('btn-random').addEventListener('click', () => this.store.random());
     document.getElementById('btn-view').addEventListener('click', () => this.viewer.resetView());
+
+    this.el.undo.addEventListener('click', () => this.store.undo());
+    this.el.redo.addEventListener('click', () => this.store.redo());
+
     const spin = document.getElementById('toggle-spin');
-    spin.addEventListener('change', () => this.viewer.setAutoRotate(spin.checked));
+    spin.checked = getSettings().autoRotate !== false;
+    this.viewer.setAutoRotate(spin.checked);
+    spin.addEventListener('change', () => {
+      updateSettings({ autoRotate: spin.checked });
+      this.viewer.setAutoRotate(spin.checked);
+    });
+
     const panel = document.getElementById('toggle-panel');
-    panel.addEventListener('change', () => this.viewer.setSidePanel(panel.checked));
+    panel.checked = getSettings().sidePanels !== false;
+    this.viewer.setSidePanel(panel.checked);
+    panel.addEventListener('change', () => {
+      updateSettings({ sidePanels: panel.checked });
+      this.viewer.setSidePanel(panel.checked);
+    });
 
     document.getElementById('btn-share').addEventListener('click', () => this._shareBuild());
     document.getElementById('btn-shot').addEventListener('click', () => this._screenshot());
+
+    // saved-builds library dropdown
+    this.el.saves.addEventListener('click', e => { e.stopPropagation(); this._toggleSavesMenu(); });
+    this.el.savesMenu.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', () => this._closeSavesMenu());
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') this._closeSavesMenu(); });
+
+    // budget advisor
+    this.el.budgetBtn.addEventListener('click', () => this._applyBudget());
+    this.el.budgetInput.addEventListener('keydown', e => { if (e.key === 'Enter') this._applyBudget(); });
 
     this.el.currency.value = getSettings().currency;
     this.el.currency.addEventListener('change', () => {
@@ -255,15 +352,17 @@ export class UI {
     const can = this.viewer.renderer.domElement;
     can.addEventListener('pointermove', e => { this._cursor = { clientX: e.clientX, clientY: e.clientY }; });
     can.addEventListener('pointerleave', () => { this._cursor = null; });
+
+    this._applyFallbackUI();
   }
 
   _toast(text) {
-    const t = this.el.toast;
-    if (!t) return;
-    t.textContent = text;
-    t.hidden = false;
+    const box = this.el.toast;
+    if (!box) return;
+    box.textContent = text;
+    box.hidden = false;
     clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => { t.hidden = true; }, 2200);
+    this._toastTimer = setTimeout(() => { box.hidden = true; }, 2200);
   }
 
   async _shareBuild() {
@@ -294,9 +393,110 @@ export class UI {
 
   /** Reset the per-category search + comparison selection. */
   _clearFilters() {
-    this.compareIds = [];
+    this.compareItems = [];
     this.query = '';
     this.el.search.value = '';
+  }
+
+  // -- saved builds -----------------------------------------------------------
+
+  _toggleSavesMenu() {
+    const open = this.el.savesMenu.hidden;
+    if (open) this._renderSavesMenu();
+    this.el.savesMenu.hidden = !open;
+    this.el.saves.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  _closeSavesMenu() {
+    if (this.el.savesMenu.hidden) return;
+    this.el.savesMenu.hidden = true;
+    this.el.saves.setAttribute('aria-expanded', 'false');
+  }
+
+  _renderSavesMenu() {
+    const list = listBuilds();
+    const rows = list.length
+      ? list.map(b => {
+        const count = Object.keys(b.map || {}).length;
+        const date = new Date(b.at || Date.now());
+        const when = Number.isNaN(date.getTime()) ? '' :
+          new Intl.DateTimeFormat(isArabic() ? 'ar' : 'en', { day: 'numeric', month: 'short' }).format(date);
+        return `<li class="save-item" data-id="${b.id}">
+            <button class="save-load" type="button">
+              <span class="save-name">${b.name}</span>
+              <span class="save-meta">${t('partsShort', { n: count })} · ${when}</span>
+            </button>
+            <button class="save-del" type="button" title="${t('delete')}" aria-label="${t('delete')}">🗑</button>
+          </li>`;
+      }).join('')
+      : `<li class="save-empty">${t('noSaved')}</li>`;
+
+    this.el.savesMenu.innerHTML = `
+      <div class="saves-head">
+        <span>${t('builds')}</span>
+        <button class="save-new" type="button">＋ ${t('saveCurrent')}</button>
+      </div>
+      <ul class="saves-list">${rows}</ul>
+      <div class="saves-hint">${t('savesHint')}</div>`;
+
+    this.el.savesMenu.querySelector('.save-new')
+      .addEventListener('click', () => this._saveCurrentBuild());
+    for (const item of this.el.savesMenu.querySelectorAll('.save-item')) {
+      const id = item.dataset.id;
+      item.querySelector('.save-load').addEventListener('click', () => this._loadSaved(id));
+      item.querySelector('.save-del').addEventListener('click', () => {
+        deleteBuild(id);
+        this._renderSavesMenu();
+        this._toast(t('deleted'));
+      });
+    }
+  }
+
+  _saveCurrentBuild() {
+    const map = this.store.toObject();
+    if (!Object.keys(map).length) { this._toast(t('nothingToSave')); return; }
+    const name = (window.prompt(t('saveNamePrompt'), '') || '').trim();
+    if (!name) return;
+    saveBuild(name, map);
+    this._renderSavesMenu();
+    this._toast(t('saved'));
+  }
+
+  _loadSaved(id) {
+    const entry = getBuild(id);
+    if (!entry) return;
+    this.activeCategory = 'case';
+    this.selected = null;
+    this.compareItems = [];
+    this.store.load(entry.map);
+    this.viewer.highlight(null);
+    this._closeSavesMenu();
+    this._toast(t('loaded'));
+  }
+
+  // -- budget advisor ---------------------------------------------------------
+
+  _applyBudget() {
+    const budget = Number(this.el.budgetInput.value);
+    if (!Number.isFinite(budget) || budget <= 0) {
+      this._toast(t('budgetInvalid'));
+      return;
+    }
+    const plan = planBudgetBuild(budget);
+    if (!plan) {
+      this._toast(t('budgetTooLow'));
+      return;
+    }
+    this.activeCategory = 'case';
+    this.selected = null;
+    this.compareItems = [];
+    this.store.load(plan.build && Object.fromEntries(
+      Object.entries(plan.build).map(([cat, part]) => [cat, part ? part.id : null])
+    ));
+    this.viewer.highlight(null);
+    this._toast(plan.withinBudget
+      ? t('budgetApplied', { total: formatPrice(plan.total) })
+      : t('budgetOver', { total: formatPrice(plan.total) }));
   }
 
   /** Install (or toggle off) a part and reflect it in the HUD immediately. */
@@ -320,6 +520,11 @@ export class UI {
       const dot = btn.querySelector('.tab-dot');
       dot.classList.toggle('on', !!build[cat]);
     }
+    this._syncTabAria();
+
+    // undo/redo affordances
+    if (this.el.undo) this.el.undo.disabled = !this.store.canUndo;
+    if (this.el.redo) this.el.redo.disabled = !this.store.canRedo;
 
     this._renderList();
     this._renderCompare();
@@ -379,7 +584,7 @@ export class UI {
 
     for (const part of list) {
       const isInstalled = installed && installed.id === part.id;
-      const inCompare = this.compareIds.includes(part.id);
+      const inCompare = this.compareItems.some(i => i.category === cat && i.partId === part.id);
       const issues = this._compatIssues(cat, part);
       const hasError = issues.some(i => i.level === 'error');
       const hasIssue = issues.length > 0;
@@ -400,7 +605,14 @@ export class UI {
       toggle.addEventListener('click', e => {
         e.stopPropagation();
         e.preventDefault();
-        this._toggleCompare(part.id);
+        this._toggleCompare(cat, part.id);
+      });
+      toggle.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.stopPropagation();
+          e.preventDefault();
+          this._toggleCompare(cat, part.id);
+        }
       });
       this.el.list.appendChild(card);
     }
@@ -415,13 +627,18 @@ export class UI {
     }
   }
 
-  _toggleCompare(partId) {
-    const i = this.compareIds.indexOf(partId);
+  _toggleCompare(category, partId) {
+    const i = this.compareItems.findIndex(it => it.category === category && it.partId === partId);
     if (i >= 0) {
-      this.compareIds.splice(i, 1);
+      this.compareItems.splice(i, 1);
     } else {
-      this.compareIds.push(partId);
-      if (this.compareIds.length > MAX_COMPARE) this.compareIds.shift();
+      // cap at MAX_COMPARE per category, keeping the shelf across categories
+      const sameCat = this.compareItems.filter(it => it.category === category);
+      if (sameCat.length >= MAX_COMPARE) {
+        const drop = this.compareItems.findIndex(it => it.category === category);
+        if (drop >= 0) this.compareItems.splice(drop, 1);
+      }
+      this.compareItems.push({ category, partId });
     }
     this._renderList();
     this._renderCompare();
@@ -432,69 +649,88 @@ export class UI {
     return evaluateCompatibility(build).filter(c => c.level === 'error' || c.level === 'warn');
   }
 
+  /** Side-by-side spec table, grouped by category (compare across tabs). */
   _renderCompare() {
     const box = this.el.compare;
-    const cat = this.activeCategory;
-    const parts = this.compareIds
-      .map(id => (PARTS[cat] || []).find(p => p.id === id))
-      .filter(Boolean);
+    const groups = {};
+    for (const it of this.compareItems) {
+      const part = (PARTS[it.category] || []).find(p => p.id === it.partId);
+      if (part) (groups[it.category] ||= []).push(part);
+    }
+    const cats = Object.keys(groups).filter(c => groups[c].length >= 2);
 
-    if (parts.length < 2) { box.hidden = true; box.innerHTML = ''; return; }
+    if (!cats.length) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
 
-    const fields = COMPARE_FIELDS[cat] || [];
-    const cheapest = Math.min(...parts.map(p => p.price));
-
+    const total = cats.reduce((n, c) => n + groups[c].length, 0);
     const head = document.createElement('div');
     head.className = 'compare-head';
-    head.innerHTML = `<span class="cmp-title">${t('compare')} ${parts.length}</span>
+    head.innerHTML = `<span class="cmp-title">${t('compare')} ${total}</span>
       <button class="cmp-clear" type="button">${t('clear')}</button>`;
 
-    const table = document.createElement('table');
-    table.className = 'compare-table';
+    const frag = document.createElement('div');
+    frag.className = 'compare-groups';
 
-    const thead = document.createElement('thead');
-    const hr = document.createElement('tr');
-    hr.innerHTML = '<th class="cmp-rowlabel"></th>';
-    for (const p of parts) {
-      const issues = this._compatIssues(cat, p);
-      const badge = issues.length
-        ? `<span class="cmp-badge ${issues.some(i => i.level === 'error') ? 'error' : 'warn'}" title="${issues.map(i => `${i.label}: ${i.detail}`).join('\n')}">${t('issueFmt', { n: issues.length, s: issues.length > 1 ? 's' : '' })}</span>`
-        : '';
-      const th = document.createElement('th');
-      th.innerHTML = `
-        <button class="cmp-pick" type="button" title="Install ${p.name}">
-          <span class="cmp-name">${p.name}</span>
-          <span class="cmp-price${p.price === cheapest ? ' cheap' : ''}">${formatPrice(p.price)}</span>
-          ${badge}
-        </button>
-        <button class="cmp-drop" type="button" title="Remove from comparison">×</button>`;
-      th.querySelector('.cmp-pick').addEventListener('click', () => this._install(cat, p.id));
-      th.querySelector('.cmp-drop').addEventListener('click', () => this._toggleCompare(p.id));
-      hr.appendChild(th);
-    }
-    thead.appendChild(hr);
-    table.appendChild(thead);
+    for (const cat of cats) {
+      const parts = groups[cat];
+      const fields = COMPARE_FIELDS[cat] || [];
+      const cheapest = Math.min(...parts.map(p => p.price));
 
-    const tbody = document.createElement('tbody');
-    for (const [label, get] of fields) {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<th class="cmp-rowlabel">${label}</th>`;
-      const values = parts.map(get);
-      for (let i = 0; i < parts.length; i++) {
-        const td = document.createElement('td');
-        td.textContent = values[i];
-        tr.appendChild(td);
+      const wrap = document.createElement('div');
+      wrap.className = 'cmp-group';
+      const title = document.createElement('div');
+      title.className = 'cmp-group-title';
+      title.textContent = categoryLabelById(cat);
+      wrap.appendChild(title);
+
+      const table = document.createElement('table');
+      table.className = 'compare-table';
+
+      const thead = document.createElement('thead');
+      const hr = document.createElement('tr');
+      hr.innerHTML = '<th class="cmp-rowlabel"></th>';
+      for (const p of parts) {
+        const issues = this._compatIssues(cat, p);
+        const badge = issues.length
+          ? `<span class="cmp-badge ${issues.some(i => i.level === 'error') ? 'error' : 'warn'}" title="${issues.map(i => `${i.label}: ${i.detail}`).join('\n')}">${t('issueFmt', { n: issues.length, s: issues.length > 1 ? 's' : '' })}</span>`
+          : '';
+        const th = document.createElement('th');
+        th.innerHTML = `
+          <button class="cmp-pick" type="button" title="Install ${p.name}">
+            <span class="cmp-name">${p.name}</span>
+            <span class="cmp-price${p.price === cheapest ? ' cheap' : ''}">${formatPrice(p.price)}</span>
+            ${badge}
+          </button>
+          <button class="cmp-drop" type="button" title="Remove from comparison">×</button>`;
+        th.querySelector('.cmp-pick').addEventListener('click', () => this._install(cat, p.id));
+        th.querySelector('.cmp-drop').addEventListener('click', () => this._toggleCompare(cat, p.id));
+        hr.appendChild(th);
       }
-      tbody.appendChild(tr);
+      thead.appendChild(hr);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      for (const [label, get] of fields) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<th class="cmp-rowlabel">${specLabel(label)}</th>`;
+        const values = parts.map(get);
+        for (let i = 0; i < parts.length; i++) {
+          const td = document.createElement('td');
+          td.textContent = values[i];
+          tr.appendChild(td);
+        }
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      wrap.appendChild(table);
+      frag.appendChild(wrap);
     }
-    table.appendChild(tbody);
 
     box.innerHTML = '';
     box.appendChild(head);
-    box.appendChild(table);
+    box.appendChild(frag);
     head.querySelector('.cmp-clear').addEventListener('click', () => {
-      this.compareIds = [];
+      this.compareItems = [];
       this._renderList();
       this._renderCompare();
     });
@@ -504,8 +740,12 @@ export class UI {
     const { store } = this;
     this.el.totalPrice.textContent = formatPrice(store.totalPrice);
     if (this.el.priceMeta) {
-      this.el.priceMeta.classList.toggle('live', priceMeta.mode === 'live');
+      const live = priceMeta.mode === 'live';
+      this.el.priceMeta.classList.toggle('live', live);
       this.el.priceMeta.textContent = this._priceMetaText();
+      this.el.priceMeta.title = live
+        ? `${t('priceLiveHint')} ${t('asOf').replace(/:$/, '')} ${this._priceMetaDate() || ''}`.trim()
+        : t('priceEstimateHint');
     }
 
     const installedCount = store.categories.filter(c => store.build[c]).length;
@@ -561,14 +801,20 @@ export class UI {
   /** Localised price freshness badge without importing priceMetaText. */
   _priceMetaText() {
     if (priceMeta.mode === 'live' && priceMeta.checkedAt) {
-      const d = new Date(priceMeta.checkedAt + 'T12:00:00');
-      const locale = isArabic() ? 'ar' : 'en';
-      if (!Number.isNaN(d.getTime())) {
-        return `${t('asOf')} ${new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(d)}`;
-      }
+      const d = this._priceMetaDate();
+      if (d) return `${t('priceLive', { n: priceMeta.applied })} · ${t('asOf')} ${d}`;
       return t('latestSync');
     }
     return t('estimateTag');
+  }
+
+  /** Formatted last-sync date, or null when unknown. */
+  _priceMetaDate() {
+    if (!priceMeta.checkedAt) return null;
+    const d = new Date(priceMeta.checkedAt + 'T12:00:00');
+    if (Number.isNaN(d.getTime())) return null;
+    const locale = isArabic() ? 'ar' : 'en';
+    return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(d);
   }
 
   _renderBuy() {

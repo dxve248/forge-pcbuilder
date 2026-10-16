@@ -50,13 +50,27 @@ export function evaluateCompatibility(build) {
     }
   }
 
-  // Cooler <-> CPU socket support
+  // Cooler mount + thermal capacity vs CPU
   if (cooler && cpu) {
     if (cooler.sockets.includes(cpu.socket)) {
       checks.push(ok('Cooler mount', `Cooler supports ${cpu.socket}`));
     } else {
       checks.push(error('Cooler mount', `Cooler has no ${cpu.socket} mounting bracket`));
     }
+    if (cooler.tdp !== undefined) {
+      if (cooler.tdp < cpu.power) {
+        checks.push(error('Cooler capacity', `${cooler.tdp}W cooler cannot handle a ${cpu.power}W CPU`));
+      } else if (cooler.tdp < cpu.power * 1.2) {
+        checks.push(warn('Cooler capacity', `${cooler.tdp}W cooler is marginal for a ${cpu.power}W CPU`));
+      } else {
+        checks.push(ok('Cooler capacity', `${cooler.tdp}W cooler comfortably covers ${cpu.power}W`));
+      }
+    }
+  }
+
+  // RAM sticks vs motherboard DIMM slots
+  if (ram && mb && mb.ramSlots !== undefined && ram.sticks > mb.ramSlots) {
+    checks.push(error('Memory slots', `${ram.sticks}-stick kit needs ${ram.sticks} slots, board has ${mb.ramSlots}`));
   }
 
   // Motherboard <-> Case form factor
@@ -108,6 +122,11 @@ export function evaluateCompatibility(build) {
   // Storage <-> Motherboard M.2 slots
   if (build.storage && mb && build.storage.interface === 'NVMe' && mb.m2Slots < 1) {
     checks.push(error('Storage', 'Motherboard has no M.2 slot for this NVMe drive'));
+  }
+
+  // GPU power connector vs PSU
+  if (gpu && psu && gpu.connector === '12VHPWR' && !psu.pcie12vhpwr) {
+    checks.push(error('PSU connector', `${gpu.name} needs a 12VHPWR cable the ${psu.wattage}W unit lacks`));
   }
 
   if (checks.length === 0) {
