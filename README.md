@@ -21,18 +21,20 @@ npm start -- 8000   # or: PORT=8000 npm start
 | --- | --- |
 | `npm start` | Run the static server (default port 5173). |
 | `npm test` | Run the Node test suite (`node --test`). |
-| `npm run lint` | Syntax-check every JS file (`node --check`). |
+| `npm run lint` | Syntax-check every module, then ESLint when installed (`scripts/lint.mjs`). |
+| `npm run format` | Prettier-format JS/CSS/HTML (optional dev dependency). |
 | `npm run sync-prices` | Scrape retailer price caches into `price-cache.json`. |
+| `npm run ci` | Full pipeline: lint → unit tests → headless smoke (auto-skips smoke if no browser). |
 
 ## Testing
 
-- **Unit/integration** — `npm test` runs `tests/*.test.mjs`: part schema/uniqueness, compatibility rules, power estimation, seeded random builds, build serialization, and store round-trips.
-- **Browser smoke** — boots the app in headless Edge via CDP and exercises picking (through glass), currency/VAT/language switches, the hover tooltip, screenshots and the share toast:
+- **Unit/integration** — `npm test` runs `tests/*.test.mjs`: part schema/uniqueness, all compatibility rules (socket, RAM type, GPU/cooler clearance, TDP capacity, DIMM slots, 12VHPWR connector), power estimation, seeded random builds, budget advisor, build serialization, and store round-trips (incl. undo/redo).
+- **Browser smoke** — boots the app in headless Edge via CDP and exercises picking (through glass), currency/VAT/language switches, the hover tooltip, screenshots, share, undo/redo, the budget advisor, the saved-builds library and cross-category compare. `npm run ci` wires this up automatically:
 
   ```bash
-  node server.mjs 5173 &
+  npm run ci                 # lint + tests + smoke (finds Edge/Chrome, or set CHROME_PATH)
+  # manual: node server.mjs 5173 &  then
   node tests/smoke.mjs http://localhost:5173/ 9333   # 9333 = --remote-debugging-port
-  # uses Edge at C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe
   ```
 
 ## URL parameters
@@ -43,6 +45,8 @@ npm start -- 8000   # or: PORT=8000 npm start
 | `?build=<base64url>` | Restore a saved build from a Share link. |
 | `?outline=0` | Disable the selection outline (low-end machines). |
 | `?low=1` | Force the low-end preset (render pixel ratio 1 + outline off). |
+
+Set `FORGE_DEV=1` when starting the server to relax CSP for live HTML editing.
 
 ## Where prices come from
 
@@ -66,9 +70,11 @@ forge-pcbuilder/
 │   ├── data/parts.js      # 105-part catalog across 8 categories
 │   └── data/rules.js      # compatibility checks + power estimation
 ├── vendor/                # Three.js r160 + OrbitControls, RoomEnvironment, post-processing
-├── server.mjs             # static server: gzip/brotli, ETags/304, /api/prices, traversal guard
-├── service-worker.js      # offline shell (network-first HTML, cache-first assets, never /api)
+├── server.mjs             # static server: gzip/brotli, ETags/304, security headers, /api/prices
+├── service-worker.js      # offline shell (network-first HTML, cache-first assets, offline.html)
+├── offline.html           # offline fallback page
 ├── manifest.json + icons/ # installable-PWA assets
+├── scripts/               # ci.mjs (lint→test→smoke), lint.mjs
 └── tests/                 # node:test suites + headless CDP smoke
 ```
 

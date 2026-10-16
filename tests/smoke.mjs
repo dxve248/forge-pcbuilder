@@ -95,17 +95,16 @@ const EXPRS = [
     const count = P.store.categories.filter(c => P.store.build[c]).length;
     return { count, ok: count >= 6 };
   })()`,
-  // saved builds library
+  // saved builds library (inline name field)
   `(() => {
     const P = window.pcBuilder;
-    const orig = window.prompt;
-    window.prompt = () => 'CI probe';
-    P.ui._saveCurrentBuild();
-    P.ui._renderSavesMenu();
+    P.ui._promptSaveName();
+    document.querySelector('#saves-menu .save-name-input').value = 'CI probe';
+    document.querySelector('#saves-menu .save-confirm').click();
     const n = document.querySelectorAll('#saves-menu .save-item').length;
-    window.prompt = orig;
+    const nameText = (document.querySelector('#saves-menu .save-name') || {}).textContent || '';
     localStorage.removeItem('forgepc-builds');
-    return { n, ok: n >= 1 };
+    return { n, nameText, ok: n >= 1 && nameText === 'CI probe' };
   })()`,
   // cross-category comparison table
   `(() => {

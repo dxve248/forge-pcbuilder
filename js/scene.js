@@ -139,6 +139,7 @@ export class Viewer {
     this.quality = {
       outline: qs.get('outline') !== '0'
     };
+    this._outlineWanted = this.quality.outline;
 
     // Camera focus animation state.
     this._camTween = null;
@@ -184,9 +185,14 @@ export class Viewer {
     // ?dpr=1 for low-end machines.
     const dprOverride = parseFloat(this._params.get('dpr'));
     const dprCap = Number.isFinite(dprOverride) ? dprOverride : 1.5;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, dprCap));
+    this._dprCap = Math.min(window.devicePixelRatio || 1, dprCap);
+    this.renderer.setPixelRatio(this._dprCap);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // The key light never moves, so its shadow map only needs re-drawing when
+    // the build itself changes — not while the camera orbits / auto-rotates.
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -217,6 +223,10 @@ export class Viewer {
       this.quality.outline = false;
       this.renderer.setPixelRatio(1);
     }
+    // Lock adaptive resolution when the user pinned ?dpr= or forced ?low=1.
+    this._dprLocked = explicitDpr || low;
+    this._frameAcc = 0;
+    this._frameN = 0;
   }
 
   _initScene() {
@@ -301,6 +311,9 @@ export class Viewer {
         outline.pulsePeriod = 0;
         outline.visibleEdgeColor.set('#7fe9ff');
         outline.hiddenEdgeColor.set('#20313f');
+        // Start disabled — it's only enabled while a part is selected, so an
+        // idle or simply orbiting viewer skips the whole outline pipeline.
+        outline.enabled = false;
         this.outline = outline;
         this.composer.addPass(outline);
       }
@@ -453,6 +466,7 @@ export class Viewer {
     this._applyHighlight();
     this._applySidePanel();
     this._rebuildSpinners();
+    this.renderer.shadowMap.needsUpdate = true;
     this._dirty = true;
   }
 
@@ -503,6 +517,8 @@ export class Viewer {
     if (this.outline) {
       const group = this.highlighted ? this.parts.get(this.highlighted) : null;
       this.outline.selectedObjects = group ? [group] : [];
+      // Only run the outline pass while something is actually selected.
+      this.outline.enabled = this._outlineWanted && !!group;
       const bad = this.highlighted && this._bad.has(this.highlighted);
       if (bad) {
         this.outline.visibleEdgeColor.set('#ff5470');
@@ -607,7 +623,7 @@ export class Viewer {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h, false);
-    if (this.composer) this.composer.setSize(w, h);
+    if (this.composer) { this.composer.setPixelRatio(1); this.composer.setSize(w, h); }
     this.controls.update();
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
@@ -617,14 +633,17 @@ export class Viewer {
     this.camera.aspect = prevAspect;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w0, h0, false);
-    if (this.composer) this.composer.setSize(w0, h0);
+    if (this.composer) { this.composer.setPixelRatio(prevPr); this.composer.setSize(w0, h0); }
     this._dirty = true;
     return url;
   }
 
   /** Enable/disable the selection outline at runtime. */
   setQuality({ outline } = {}) {
-    if (outline !== undefined && this.outline) this.outline.enabled = outline;
+    if (outline !== undefined) {
+      this._outlineWanted = outline;
+      if (this.outline) this.outline.enabled = outline && !!this.highlighted;
+    }
     this._dirty = true;
   }
 
@@ -633,7 +652,11 @@ export class Viewer {
     const w = this.container.clientWidth || 1;
     const h = this.container.clientHeight || 1;
     this.renderer.setSize(w, h, false);
-    if (this.composer) this.composer.setSize(w, h);
+    if (this.composer) {
+      // EffectComposer caches the pixel ratio; keep it in step with the renderer.
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this._dirty = true;
@@ -662,6 +685,7 @@ export class Viewer {
         const t = group.userData.spawn;
         const eased = 1 - Math.pow(1 - t, 3);
         group.scale.setScalar(Math.max(0.001, eased));
+        this.renderer.shadowMap.needsUpdate = true; // keep shadows in sync with the pop-in
         animating = true;
       }
     }
@@ -694,7 +718,30 @@ export class Viewer {
     if (!this._dirty && !animating) return;
     this._dirty = false;
 
-    if (this.composer) this.composer.render();
+    // Adaptive resolution: if frames stay slow for a sustained stretch, drop
+    // to pixel ratio 1; restore the cap once they're comfortably fast again.
+    if (!this._dprLocked && dt < 0.1) {
+      this._frameAcc += dt;
+      this._frameN++;
+      if (this._frameN >= 45) {
+        const avg = this._frameAcc / this._frameN;
+        this._frameAcc = 0;
+        this._frameN = 0;
+        const pr = this.renderer.getPixelRatio();
+        if (avg > 0.024 && pr > 1) {
+          this.renderer.setPixelRatio(1);
+          this.resize();
+        } else if (avg < 0.014 && pr < this._dprCap) {
+          this.renderer.setPixelRatio(this._dprCap);
+          this.resize();
+        }
+      }
+    }
+
+    // Skip the EffectComposer (an extra render target + full-screen output
+    // pass) whenever no post effect is active — e.g. nothing is selected.
+    const postActive = this.outline ? this.outline.enabled : false;
+    if (this.composer && postActive) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
   }
 }

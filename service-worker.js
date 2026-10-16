@@ -3,15 +3,18 @@
 
 // Bump this single constant whenever shipped assets change; the activate
 // handler purges every cache that doesn't match the new name.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `forgepc-${VERSION}`;
 const API_PREFIX = '/api/prices';
 
 // App shell precached on install so the builder opens offline.
+const OFFLINE_URL = './offline.html';
 const PRECACHE = [
   './',
   './index.html',
+  './offline.html',
   './css/styles.css',
+  './css/offline.css',
   './js/main.js',
   './manifest.json'
 ];
@@ -40,7 +43,12 @@ async function networkFirst(req) {
     return res;
   } catch {
     const cached = await cache.match(req);
-    return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
+    if (cached) return cached;
+    if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+      const offline = await cache.match(OFFLINE_URL);
+      if (offline) return offline;
+    }
+    return new Response('Offline', { status: 503, statusText: 'Offline' });
   }
 }
 

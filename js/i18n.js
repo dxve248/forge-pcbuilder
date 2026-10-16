@@ -58,6 +58,8 @@ const DICT = {
   redo:            { en: 'Redo (Ctrl+Y)',      ar: 'إعادة (Ctrl+Y)' },
   builds:          { en: 'Builds',            ar: 'المباني المحفوظة' },
   saveCurrent:     { en: 'Save current',      ar: 'حفظ الحالي' },
+  save:            { en: 'Save',              ar: 'حفظ' },
+  cancel:          { en: 'Cancel',            ar: 'إلغاء' },
   saveNamePrompt:  { en: 'Name this build',   ar: 'سمّ هذا المبنى' },
   delete:          { en: 'Delete',            ar: 'حذف' },
   noSaved:         { en: 'No saved builds yet.', ar: 'لا توجد مبانٍ محفوظة بعد.' },
@@ -77,6 +79,14 @@ const DICT = {
   webglUnavailable: { en: '3D preview unavailable on this device — 2D builder still works.', ar: 'المعاينة ثلاثية الأبعاد غير متاحة على هذا الجهاز — لا يزال منشئ المكونات يعمل.' },
   issueFmt:        { en: '{n} issue{s}',       ar: '{n} مشاكل' },
   hudIssues:       { en: '{n} compatibility issue{s}', ar: '{n} مشاكل توافق' },
+  unitCores:       { en: 'cores',             ar: 'أنوية' },
+  coolerAir:       { en: 'Air',               ar: 'هوائي' },
+  unitModular:     { en: 'modular',           ar: 'قابل للفصل' },
+  coolerShort:     { en: 'Cooler',            ar: 'المبرد' },
+  fansFmt:         { en: '{n} fans',          ar: '{n} مراوح' },
+  sticksFmt:       { en: '{n}× stick',        ar: '{n}× شرائح' },
+  selectedPart:    { en: 'Selected part',     ar: 'القطعة المحددة' },
+  comparisonTitle: { en: 'Part comparison',   ar: 'مقارنة القطع' },
 };
 
 export function isArabic() {

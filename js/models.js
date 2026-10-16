@@ -62,7 +62,7 @@ function canvasTex(key, w, h, draw) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 8;
+  t.anisotropy = 4;
   texCache.set(key, t);
   return t;
 }
@@ -146,9 +146,8 @@ function emissiveMat(color, intensity = 1.6) {
 }
 function glassMat() {
   return new THREE.MeshPhysicalMaterial({
-    color: 0x9fd4ff, metalness: 0, roughness: 0.03, transmission: 1.0,
-    transparent: true, opacity: 0.22, ior: 1.5, thickness: 0.5,
-    attenuationColor: new THREE.Color(0x6ba8d0), attenuationDistance: 6,
+    color: 0x9fd4ff, metalness: 0, roughness: 0.03,
+    transparent: true, opacity: 0.18, ior: 1.5,
     envMapIntensity: 1.6,
     side: THREE.DoubleSide, clearcoat: 1, clearcoatRoughness: 0.04
   });

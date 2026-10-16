@@ -2,7 +2,11 @@
 // UI helpers. Falls back to defaults in non-browser contexts so that the
 // modules stay importable from Node tests.
 
-const DEFAULTS = { lang: 'en', currency: 'AED', vat: true, autoRotate: true, sidePanels: true, view: null };
+const DEFAULTS = {
+  lang: 'en', currency: 'AED', vat: true,
+  autoRotate: true, sidePanels: true, view: null,
+  category: 'case', sort: 'recommended'
+};
 const KEY = 'forgepc-settings';
 
 let settings = { ...DEFAULTS };

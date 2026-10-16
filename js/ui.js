@@ -4,7 +4,7 @@
 
 import { CATEGORIES, PARTS } from './data/parts.js';
 import { evaluateCompatibility } from './data/rules.js';
-import { formatPrice, vatLabel } from './currency.js';
+import { formatPrice } from './currency.js';
 import { buyLinks } from './retailers.js';
 import { priceMeta } from './prices.js';
 import { getSettings, updateSettings } from './settings.js';
@@ -35,14 +35,16 @@ function fmtCapacity(gb) {
 }
 
 const SPEC_FMT = {
-  cpu: p => `${p.cores} cores · ${p.clock} · ${p.socket} · ${p.power}W`,
+  cpu: p => `${p.cores} ${t('unitCores')} · ${p.clock} · ${p.socket} · ${p.power}W`,
   motherboard: p => `${p.socket} · ${p.ramType} · ${p.formFactor} · ${p.m2Slots}× M.2`,
-  cooler: p => p.type === 'Air' ? `Air · ${p.height}mm · ${p.sockets.join('/')}` : `${p.type} · ${p.radiator}mm · ${p.sockets.join('/')}`,
-  ram: p => `${p.ramType} · ${p.capacity}GB · ${p.speed}MHz · ${p.sticks}× stick`,
+  cooler: p => p.type === 'Air'
+    ? `${t('coolerAir')} · ${p.height}mm · ${p.sockets.join('/')}`
+    : `${p.type} · ${p.radiator}mm · ${p.sockets.join('/')}`,
+  ram: p => `${p.ramType} · ${p.capacity}GB · ${p.speed}MHz · ${t('sticksFmt', { n: p.sticks })}`,
   gpu: p => `${p.vram}GB VRAM · ${p.length}mm · ${p.power}W`,
   storage: p => `${p.interface} · ${fmtCapacity(p.capacity)} · ${p.form}`,
-  psu: p => `${p.wattage}W · ${p.efficiency} · ${p.modular} modular`,
-  case: p => `${p.formFactors.join('/')} · GPU ≤${p.maxGpuLength}mm · Cooler ≤${p.maxCoolerHeight}mm · ${p.fans} fans`
+  psu: p => `${p.wattage}W · ${p.efficiency} · ${p.modular} ${t('unitModular')}`,
+  case: p => `${p.formFactors.join('/')} · GPU ≤${p.maxGpuLength}mm · ${t('coolerShort')} ≤${p.maxCoolerHeight}mm · ${t('fansFmt', { n: p.fans })}`
 };
 
 // Rows shown in the comparison table, per category.
@@ -101,10 +103,10 @@ export class UI {
   constructor(store, viewer) {
     this.store = store;
     this.viewer = viewer;
-    this.activeCategory = 'case';
+    this.activeCategory = getSettings().category || 'case';
     this.selected = null; // { category, partId }
     this.query = '';
-    this.sort = 'recommended';
+    this.sort = getSettings().sort || 'recommended';
     this.compareItems = []; // [{ category, partId }] — works across categories
 
     this.el = {
@@ -134,6 +136,8 @@ export class UI {
       budgetInput: document.getElementById('budget-input'),
       budgetBtn: document.getElementById('btn-budget')
     };
+
+    this.el.sort.value = this.sort;
 
     this._buildTabs();
     this._wireControls();
@@ -179,6 +183,14 @@ export class UI {
     }
     const hint = document.querySelector('.viewer-hint');
     if (hint) hint.textContent = t('viewerHint');
+
+    const setAria = (id, text) => {
+      const el = document.getElementById(id);
+      if (el) el.setAttribute('aria-label', text);
+    };
+    setAria('hud', t('selectedPart'));
+    setAria('compare', t('comparisonTitle'));
+    setAria('partlist', categoryLabelById(this.activeCategory));
   }
 
   /** Disable the 3D-only controls when running in 2D-only fallback mode. */
@@ -203,6 +215,7 @@ export class UI {
       btn.type = 'button';
       btn.setAttribute('role', 'tab');
       btn.setAttribute('aria-selected', 'false');
+      btn.setAttribute('aria-controls', 'partlist');
       btn.tabIndex = -1;
       btn.id = `tab-${cat.id}`;
       btn.dataset.category = cat.id;
@@ -220,6 +233,7 @@ export class UI {
 
   _activateCategory(id) {
     this.activeCategory = id;
+    updateSettings({ category: id });
     this.selected = null;
     this._clearFilters();
     this.viewer.highlight(null);
@@ -249,6 +263,7 @@ export class UI {
       btn.setAttribute('aria-selected', active ? 'true' : 'false');
       btn.tabIndex = active ? 0 : -1;
     }
+    if (this.el.list) this.el.list.setAttribute('aria-label', categoryLabelById(this.activeCategory));
   }
 
   _wireControls() {
@@ -315,6 +330,7 @@ export class UI {
     });
     this.el.sort.addEventListener('change', () => {
       this.sort = this.el.sort.value;
+      updateSettings({ sort: this.sort });
       this._renderList();
     });
 
@@ -322,6 +338,7 @@ export class UI {
     this.viewer.onSelect = category => {
       if (!category) { this.selected = null; this.viewer.highlight(null); this.render(); return; }
       this.activeCategory = category;
+      updateSettings({ category });
       this._clearFilters();
       const part = this.store.build[category];
       this.selected = part ? { category, partId: part.id } : null;
@@ -367,9 +384,13 @@ export class UI {
 
   async _shareBuild() {
     try {
+      const map = this.store.toObject();
       const url = new URL(location.href);
-      url.searchParams.set('build', encodeBuild(this.store.toObject()));
-      await navigator.clipboard.writeText(url.href);
+      url.searchParams.set('build', encodeBuild(map));
+      // Reflect the shareable link in the address bar so a manual copy/reload
+      // reproduces this exact build (autosave alone wouldn't survive a reset).
+      try { history.replaceState(null, '', url.href); } catch { /* ignore */ }
+      try { await navigator.clipboard.writeText(url.href); } catch { /* clipboard blocked */ }
       this._toast(t('copied'));
     } catch {
       this._toast(t('copied'));
@@ -415,48 +436,121 @@ export class UI {
 
   _renderSavesMenu() {
     const list = listBuilds();
-    const rows = list.length
-      ? list.map(b => {
+    const menu = this.el.savesMenu;
+    menu.replaceChildren();
+
+    const head = document.createElement('div');
+    head.className = 'saves-head';
+    const title = document.createElement('span');
+    title.textContent = t('builds');
+    const newBtn = document.createElement('button');
+    newBtn.className = 'save-new';
+    newBtn.type = 'button';
+    newBtn.textContent = '＋ ' + t('saveCurrent');
+    newBtn.addEventListener('click', () => this._promptSaveName());
+    head.append(title, newBtn);
+    menu.appendChild(head);
+
+    const ul = document.createElement('ul');
+    ul.className = 'saves-list';
+    if (!list.length) {
+      const empty = document.createElement('li');
+      empty.className = 'save-empty';
+      empty.textContent = t('noSaved');
+      ul.appendChild(empty);
+    } else {
+      for (const b of list) {
         const count = Object.keys(b.map || {}).length;
         const date = new Date(b.at || Date.now());
         const when = Number.isNaN(date.getTime()) ? '' :
           new Intl.DateTimeFormat(isArabic() ? 'ar' : 'en', { day: 'numeric', month: 'short' }).format(date);
-        return `<li class="save-item" data-id="${b.id}">
-            <button class="save-load" type="button">
-              <span class="save-name">${b.name}</span>
-              <span class="save-meta">${t('partsShort', { n: count })} · ${when}</span>
-            </button>
-            <button class="save-del" type="button" title="${t('delete')}" aria-label="${t('delete')}">🗑</button>
-          </li>`;
-      }).join('')
-      : `<li class="save-empty">${t('noSaved')}</li>`;
 
-    this.el.savesMenu.innerHTML = `
-      <div class="saves-head">
-        <span>${t('builds')}</span>
-        <button class="save-new" type="button">＋ ${t('saveCurrent')}</button>
-      </div>
-      <ul class="saves-list">${rows}</ul>
-      <div class="saves-hint">${t('savesHint')}</div>`;
+        const li = document.createElement('li');
+        li.className = 'save-item';
+        li.dataset.id = b.id;
 
-    this.el.savesMenu.querySelector('.save-new')
-      .addEventListener('click', () => this._saveCurrentBuild());
-    for (const item of this.el.savesMenu.querySelectorAll('.save-item')) {
-      const id = item.dataset.id;
-      item.querySelector('.save-load').addEventListener('click', () => this._loadSaved(id));
-      item.querySelector('.save-del').addEventListener('click', () => {
-        deleteBuild(id);
-        this._renderSavesMenu();
-        this._toast(t('deleted'));
-      });
+        const load = document.createElement('button');
+        load.className = 'save-load';
+        load.type = 'button';
+        const name = document.createElement('span');
+        name.className = 'save-name';
+        name.textContent = b.name; // user text — never innerHTML
+        const meta = document.createElement('span');
+        meta.className = 'save-meta';
+        meta.textContent = `${t('partsShort', { n: count })} · ${when}`;
+        load.append(name, meta);
+        load.addEventListener('click', () => this._loadSaved(b.id));
+
+        const del = document.createElement('button');
+        del.className = 'save-del';
+        del.type = 'button';
+        del.title = t('delete');
+        del.setAttribute('aria-label', t('delete'));
+        del.textContent = '🗑';
+        del.addEventListener('click', () => {
+          deleteBuild(b.id);
+          this._renderSavesMenu();
+          this._toast(t('deleted'));
+        });
+
+        li.append(load, del);
+        ul.appendChild(li);
+      }
     }
+    menu.appendChild(ul);
+
+    const hint = document.createElement('div');
+    hint.className = 'saves-hint';
+    hint.textContent = t('savesHint');
+    menu.appendChild(hint);
   }
 
-  _saveCurrentBuild() {
+  /** Reveal the inline name field for saving the current build. */
+  _promptSaveName() {
+    const menu = this.el.savesMenu;
+    const existing = menu.querySelector('.save-name-input');
+    if (existing) { existing.focus(); return; }
+
+    const row = document.createElement('div');
+    row.className = 'save-name-row';
+    const input = document.createElement('input');
+    input.className = 'save-name-input';
+    input.type = 'text';
+    input.placeholder = t('saveNamePrompt');
+    input.maxLength = 60;
+    input.setAttribute('aria-label', t('saveNamePrompt'));
+
+    const save = document.createElement('button');
+    save.className = 'save-confirm';
+    save.type = 'button';
+    save.textContent = t('save');
+    const cancel = document.createElement('button');
+    cancel.className = 'save-cancel';
+    cancel.type = 'button';
+    cancel.textContent = t('cancel');
+
+    const commit = () => {
+      const name = input.value.trim();
+      if (!name) { input.focus(); return; }
+      this._commitSave(name);
+    };
+    save.addEventListener('click', commit);
+    cancel.addEventListener('click', () => this._renderSavesMenu());
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); this._renderSavesMenu(); }
+    });
+
+    row.append(input, save, cancel);
+    const head = menu.querySelector('.saves-head');
+    head ? head.after(row) : menu.prepend(row);
+    input.focus();
+  }
+
+  /** Persist the current build under a (already validated) name. */
+  _commitSave(name) {
     const map = this.store.toObject();
     if (!Object.keys(map).length) { this._toast(t('nothingToSave')); return; }
-    const name = (window.prompt(t('saveNamePrompt'), '') || '').trim();
-    if (!name) return;
     saveBuild(name, map);
     this._renderSavesMenu();
     this._toast(t('saved'));
@@ -466,6 +560,7 @@ export class UI {
     const entry = getBuild(id);
     if (!entry) return;
     this.activeCategory = 'case';
+    updateSettings({ category: 'case' });
     this.selected = null;
     this.compareItems = [];
     this.store.load(entry.map);
@@ -488,6 +583,7 @@ export class UI {
       return;
     }
     this.activeCategory = 'case';
+    updateSettings({ category: 'case' });
     this.selected = null;
     this.compareItems = [];
     this.store.load(plan.build && Object.fromEntries(
@@ -685,16 +781,24 @@ export class UI {
 
       const table = document.createElement('table');
       table.className = 'compare-table';
+      const caption = document.createElement('caption');
+      caption.className = 'sr-only';
+      caption.textContent = `${categoryLabelById(cat)} — ${t('comparisonTitle')}`;
+      table.appendChild(caption);
 
       const thead = document.createElement('thead');
       const hr = document.createElement('tr');
-      hr.innerHTML = '<th class="cmp-rowlabel"></th>';
+      const corner = document.createElement('th');
+      corner.className = 'cmp-rowlabel';
+      corner.scope = 'col';
+      hr.appendChild(corner);
       for (const p of parts) {
         const issues = this._compatIssues(cat, p);
         const badge = issues.length
           ? `<span class="cmp-badge ${issues.some(i => i.level === 'error') ? 'error' : 'warn'}" title="${issues.map(i => `${i.label}: ${i.detail}`).join('\n')}">${t('issueFmt', { n: issues.length, s: issues.length > 1 ? 's' : '' })}</span>`
           : '';
         const th = document.createElement('th');
+        th.scope = 'col';
         th.innerHTML = `
           <button class="cmp-pick" type="button" title="Install ${p.name}">
             <span class="cmp-name">${p.name}</span>
@@ -712,7 +816,7 @@ export class UI {
       const tbody = document.createElement('tbody');
       for (const [label, get] of fields) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<th class="cmp-rowlabel">${specLabel(label)}</th>`;
+        tr.innerHTML = `<th class="cmp-rowlabel" scope="row">${specLabel(label)}</th>`;
         const values = parts.map(get);
         for (let i = 0; i < parts.length; i++) {
           const td = document.createElement('td');
@@ -788,6 +892,7 @@ export class UI {
         <span class="build-price">${part ? formatPrice(part.price) : '—'}</span>`;
       row.addEventListener('click', () => {
         this.activeCategory = cat;
+        updateSettings({ category: cat });
         this._clearFilters();
         this.selected = part ? { category: cat, partId: part.id } : null;
         if (part) this.viewer.highlight(cat);
@@ -823,7 +928,7 @@ export class UI {
     const missing = store.categories.filter(c => !store.build[c]);
 
     if (missing.length) {
-      const names = missing.map(id => categoryLabelById(id)).join(t('sep') === '·' ? ' · ' : '، ');
+      const names = missing.map(id => categoryLabelById(id)).join(t('sep'));
       box.innerHTML = `
         <div class="buy-intro">${t('buyIntro')}</div>
         <div class="buy-missing"><b>${t('stillNeeded')}</b> ${names}</div>`;
@@ -862,7 +967,7 @@ export class UI {
       ${notice}
       <div class="buy-list">${rows}</div>
       <div class="buy-total"><span>${t('subtotal')}</span><span>${formatPrice(store.totalPrice)}</span></div>
-      <div class="buy-disclaimer">${this._priceMetaText()} · ${t('buyDisclaimer', { vat: vatLabel() })}</div>`;
+      <div class="buy-disclaimer">${this._priceMetaText()} · ${t('buyDisclaimer', { vat: t(getSettings().vat ? 'incVat' : 'excVat') })}</div>`;
   }
 
   _renderHud() {

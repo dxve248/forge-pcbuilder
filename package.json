@@ -7,8 +7,13 @@
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test",
-    "lint": "node --check js/main.js && node --check js/ui.js && node --check js/scene.js && node --check js/models.js && node --check js/build.js && node --check js/currency.js && node --check js/settings.js && node --check js/i18n.js && node --check js/prices.js && node --check js/retailers.js && node --check js/saved.js && node --check js/advisor.js && node --check js/data/parts.js && node --check js/data/rules.js && node --check server.mjs && node --check service-worker.js",
+    "lint": "node scripts/lint.mjs",
+    "format": "prettier --write \"js/**/*.js\" \"tests/**/*.mjs\" \"scripts/**/*.mjs\" \"*.mjs\" \"*.js\" \"css/*.css\" \"*.html\"",
     "sync-prices": "node js/update-prices.mjs",
     "ci": "node scripts/ci.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^9.13.0",
+    "prettier": "^3.3.3"
   }
 }

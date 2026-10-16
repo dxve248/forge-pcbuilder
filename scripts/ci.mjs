@@ -18,31 +18,17 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const node = process.execPath;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-const LINT_FILES = [
-  'js/main.js', 'js/ui.js', 'js/scene.js', 'js/models.js', 'js/build.js',
-  'js/currency.js', 'js/settings.js', 'js/i18n.js', 'js/prices.js',
-  'js/retailers.js', 'js/saved.js', 'js/advisor.js',
-  'js/data/parts.js', 'js/data/rules.js',
-  'server.mjs', 'service-worker.js'
-];
-
 function step(name) { console.log(`\n=== ${name} ===`); }
 
 function runSync(args) {
   return spawnSync(node, args, { cwd: ROOT, stdio: 'inherit' });
 }
 
-// 1. syntax check every module ------------------------------------------------
+// 1. syntax + (optional) eslint --------------------------------------------------
 function lint() {
   step('lint');
-  for (const f of LINT_FILES) {
-    const r = spawnSync(node, ['--check', f], { cwd: ROOT });
-    if (r.status !== 0) {
-      console.error(`syntax error in ${f}`);
-      process.exit(1);
-    }
-  }
-  console.log(`ok — ${LINT_FILES.length} files parsed`);
+  const r = runSync(['scripts/lint.mjs']);
+  if (r.status !== 0) process.exit(r.status || 1);
 }
 
 // 2. unit tests ---------------------------------------------------------------

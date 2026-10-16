@@ -71,6 +71,43 @@ test('compat: empty build reports an informational hint only', () => {
   assert.deepEqual(chk, [{ level: 'info', label: 'Get started', detail: 'Pick a case and components to begin your build' }]);
 });
 
+test('compat: an under-capacity cooler on a hot CPU is an error', () => {
+  const hotCpu = find('cpu', c => c.power >= 170);
+  const weakCooler = hotCpu && find('cooler', cl => cl.tdp < hotCpu.power && cl.sockets.includes(hotCpu.socket));
+  assert.ok(hotCpu && weakCooler, 'catalog has a CPU/cooler pair that trips the TDP rule');
+  const chk = evaluateCompatibility(buildWith({ cpu: hotCpu, cooler: weakCooler }));
+  assert.equal(chk.find(c => c.label === 'Cooler capacity').level, 'error');
+});
+
+test('compat: marginal cooler capacity is a warning, not an error', () => {
+  let pair = null;
+  for (const cl of PARTS.cooler) {
+    for (const c of PARTS.cpu) {
+      if (cl.sockets.includes(c.socket) && cl.tdp > c.power && cl.tdp < c.power * 1.2) { pair = { cl, c }; break; }
+    }
+    if (pair) break;
+  }
+  assert.ok(pair, 'catalog has a cooler that is marginal for some CPU');
+  const chk = evaluateCompatibility(buildWith({ cpu: pair.c, cooler: pair.cl }));
+  assert.equal(chk.find(c => c.label === 'Cooler capacity').level, 'warn');
+});
+
+test('compat: a 4-stick RAM kit on a 2-slot board is an error', () => {
+  const kit = find('ram', r => r.sticks >= 4);
+  const board = kit && find('motherboard', m => m.ramSlots < kit.sticks && m.ramType === kit.ramType);
+  assert.ok(kit && board, 'catalog has a 4-stick kit and a 2-slot board');
+  const chk = evaluateCompatibility(buildWith({ motherboard: board, ram: kit }));
+  assert.equal(chk.find(c => c.label === 'Memory slots').level, 'error');
+});
+
+test('compat: a 12VHPWR GPU with a non-12VHPWR PSU is an error', () => {
+  const gpu = find('gpu', g => g.connector === '12VHPWR');
+  const psu = find('psu', p => !p.pcie12vhpwr);
+  assert.ok(gpu && psu, 'catalog has a 12VHPWR GPU and a PSU without the cable');
+  const chk = evaluateCompatibility(buildWith({ gpu, psu }));
+  assert.equal(chk.find(c => c.label === 'PSU connector').level, 'error');
+});
+
 test('power: full build draws more than the baseline', () => {
   const base = estimatePower({});
   const full = estimatePower(buildWith({}));

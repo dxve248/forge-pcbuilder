@@ -31,8 +31,10 @@ const send = (res, status, body, headers = {}) =>
   res.writeHead(status, { ...SECURITY, ...headers }).end(body);
 
 // --- security headers -------------------------------------------------------
-// The only inline script in the page is the import map, so we hash it at boot
-// and allow just that one under a strict script-src (no 'unsafe-inline').
+// The only inline scripts in the page are the import map and the JSON-LD block,
+// so we hash them at boot and allow just those under a strict script-src (no
+// 'unsafe-inline'). Hashes are computed from index.html once at startup — edit
+// the inline markup and restart the server (or set FORGE_DEV=1 to relax CSP).
 async function inlineScriptHashes() {
   try {
     const html = await readFile(join(ROOT, 'index.html'), 'utf8');
@@ -48,11 +50,18 @@ async function inlineScriptHashes() {
   }
 }
 
+const DEV = process.env.FORGE_DEV === '1';
 const SCRIPT_HASHES = await inlineScriptHashes();
+// Dev mode keeps the strict directives but allows inline scripts/styles so
+// live-editing the HTML doesn't trip the import-map hash. Production stays
+// hash-locked.
+const SCRIPT_SRC = DEV
+  ? "script-src 'self' 'unsafe-inline'"
+  : `script-src 'self' ${SCRIPT_HASHES.join(' ')}`.trim();
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' ${SCRIPT_HASHES.join(' ')}`.trim(),
-  "style-src 'self'",
+  SCRIPT_SRC,
+  DEV ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
   "img-src 'self' data: blob:",
   "connect-src 'self'",
   "font-src 'self'",
@@ -85,10 +94,13 @@ async function readPriceCache() {
   }
 }
 
-// Compressed variants are cached in memory so each asset is encoded once.
-const encCache = new Map(); // `${filePath}#${encoding}` -> Buffer
-async function compress(file, data, encoding) {
-  const key = `${file}#${encoding}`;
+// Compressed variants are cached in memory so each asset is encoded once. Keys
+// include the file's mtime so an edited asset is re-encoded instead of serving
+// stale bytes; the map is pruned when it grows past a small cap.
+const encCache = new Map(); // `${file}#${mtimeMs}#${encoding}` -> Buffer
+const ENC_CACHE_MAX = 200;
+async function compress(file, mtime, data, encoding) {
+  const key = `${file}#${mtime}#${encoding}`;
   let out = encCache.get(key);
   if (!out) {
     out = encoding === 'br'
@@ -96,6 +108,7 @@ async function compress(file, data, encoding) {
       : encoding === 'gzip'
         ? await gzipP(data, { level: 6 })
         : data;
+    if (encCache.size >= ENC_CACHE_MAX) encCache.clear();
     encCache.set(key, out);
   }
   return out;
@@ -135,19 +148,25 @@ http.createServer(async (req, res) => {
 
     const data = await readFile(file);
 
+    // The HTML shell and the service worker must always be revalidated so
+    // deploys and SW updates take effect immediately; hashed/static assets can
+    // ride the short max-age and ETag.
+    const isHtml = extname(file).toLowerCase() === '.html';
+    const isSW = file.endsWith('service-worker.js');
+    const cacheControl = (isHtml || isSW) ? 'public, no-cache' : 'public, max-age=3600';
+
     // Strong ETag derived from the content, so responses can be cached and
     // revalidated cheaply (304) after the browser's short max-age.
     const hash = createHash('sha1').update(data).digest('hex').slice(0, 20);
     const etag = `"${hash}"`;
     // Node's HTTP parser strips the surrounding quotes on if-none-match.
     if (req.headers['if-none-match'] === hash) {
-      res.writeHead(304, { ETag: etag, 'Cache-Control': 'public, max-age=3600' });
+      res.writeHead(304, { ETag: etag, 'Cache-Control': cacheControl });
       return res.end();
     }
 
-    // Apply content negotiation for /api and the HTML route; everything
-    // else has Cache-Control pointing at the immutable-ish ETag above.
-    const isHtml = extname(file).toLowerCase() === '.html';
+    // Apply content negotiation for the HTML route; everything else can be
+    // brotli/gzip encoded.
     const acceptEncoding = req.headers['accept-encoding'] || '';
     let encoding = null;
     if (!isHtml && (acceptEncoding.includes('br') || acceptEncoding.includes('gzip'))) {
@@ -157,12 +176,12 @@ http.createServer(async (req, res) => {
     const head = {
       'Content-Type': TYPES[extname(file).toLowerCase()] || 'application/octet-stream',
       'ETag': etag,
-      'Cache-Control': isHtml ? 'public, no-cache' : 'public, max-age=3600',
+      'Cache-Control': cacheControl,
       'Vary': 'Accept-Encoding',
       ...SECURITY
     };
     if (encoding) {
-      const payload = await compress(file, data, encoding);
+      const payload = await compress(file, info.mtimeMs, data, encoding);
       head['Content-Encoding'] = encoding;
       head['Content-Length'] = payload.length;
       res.writeHead(200, head);
